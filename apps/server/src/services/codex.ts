@@ -23,11 +23,11 @@ const GROUPING_SCHEMA = {
 						enum: ["grey", "blue", "red", "yellow", "green", "pink", "purple", "cyan", "orange"],
 					},
 					tabIds: { type: "array", items: { type: "number" } },
-					existingGroupId: { type: "number" },
+					existingGroupId: { type: ["number", "null"] },
 					isNew: { type: "boolean" },
 					confidence: { type: "number" },
 				},
-				required: ["groupName", "color", "tabIds", "isNew", "confidence"],
+				required: ["groupName", "color", "tabIds", "existingGroupId", "isNew", "confidence"],
 				additionalProperties: false,
 			},
 		},
@@ -70,6 +70,7 @@ class CodexAppServer {
 
 	async ensureRunning(): Promise<void> {
 		if (this.proc && !this.proc.killed && this.initialized) return;
+		console.log("[codex] Starting app-server...");
 		await this.start();
 	}
 
@@ -86,7 +87,8 @@ class CodexAppServer {
 			console.error("[codex stderr]", data.toString());
 		});
 
-		this.proc.on("exit", () => {
+		this.proc.on("exit", (code) => {
+			console.error(`[codex] App-server exited with code ${code}`);
 			this.initialized = false;
 			this.threadId = null;
 			this.proc = null;
@@ -103,14 +105,13 @@ class CodexAppServer {
 				title: "Tab Organizer",
 				version: "0.1.0",
 			},
-			capabilities: {
-				optOutNotificationMethods: ["item/agentMessage/delta", "codex/event/session_configured"],
-			},
+			capabilities: {},
 		});
 
 		// Send initialized notification
 		this.sendNotification("initialized", {});
 		this.initialized = true;
+		console.log("[codex] App-server initialized");
 	}
 
 	private handleMessage(line: string): void {
@@ -139,23 +140,29 @@ class CodexAppServer {
 		// Notification from server
 		const method = msg.method as string;
 		const params = msg.params as Record<string, unknown> | undefined;
+		// Capture agent message output from item/completed notifications
+		if (method === "item/completed" && params) {
+			const item = params.item as Record<string, unknown> | undefined;
+			if (item?.type === "agentMessage" && typeof item.text === "string") {
+				this.turnOutput = item.text;
+			}
+		}
 
 		if (method === "turn/completed" && params) {
 			const turn = params.turn as Record<string, unknown> | undefined;
-			const items = (turn?.items as Array<Record<string, unknown>>) || [];
-			// Find the agent message with structured output
-			for (const item of items) {
-				if (item.type === "agentMessage") {
-					const content = item.content as Array<Record<string, unknown>> | undefined;
-					if (content) {
-						for (const block of content) {
-							if (block.type === "outputText" && typeof block.text === "string") {
-								this.turnOutput = block.text;
-							}
-						}
-					}
+
+			// Check for turn-level error
+			if (turn?.status === "failed" && turn.error) {
+				const err = turn.error as Record<string, unknown>;
+				const errMsg = (err.message as string) || "Turn failed";
+				console.error("[codex] Turn failed:", errMsg);
+				if (this.turnResolve) {
+					this.turnResolve("");
+					this.turnResolve = null;
 				}
+				return;
 			}
+
 			if (this.turnResolve) {
 				this.turnResolve(this.turnOutput || "");
 				this.turnResolve = null;
@@ -180,12 +187,14 @@ class CodexAppServer {
 
 	async startThread(): Promise<string> {
 		const settings = storage.getSettings();
+		console.log(`[codex] Starting thread with model=${settings.model}`);
 		const result = (await this.send("thread/start", {
 			model: settings.model,
 			approvalPolicy: "never",
 			sandboxPolicy: "readOnly",
 		})) as { thread: { id: string } };
 		this.threadId = result.thread.id;
+		console.log(`[codex] Thread started: ${this.threadId}`);
 		return this.threadId;
 	}
 
@@ -195,6 +204,9 @@ class CodexAppServer {
 		if (!this.threadId) {
 			await this.startThread();
 		}
+
+		console.log(`[codex] Starting turn (prompt length: ${prompt.length} chars)`);
+		const startTime = Date.now();
 
 		const outputPromise = new Promise<string>((resolve) => {
 			this.turnResolve = resolve;
@@ -211,7 +223,11 @@ class CodexAppServer {
 			outputSchema,
 		});
 
-		return Promise.race([outputPromise, timeoutPromise]);
+		const result = await Promise.race([outputPromise, timeoutPromise]);
+		console.log(
+			`[codex] Turn completed in ${((Date.now() - startTime) / 1000).toFixed(1)}s (output: ${result.length} chars)`,
+		);
+		return result;
 	}
 
 	async listModels(): Promise<Array<{ id: string; name: string }>> {
@@ -242,18 +258,24 @@ const codex = new CodexAppServer();
 export async function organizeWithAI(request: OrganizeRequest): Promise<OrganizeResponse> {
 	const rules = storage.getRules();
 	const memories = storage.getMemories();
+	console.log(`[organize] Building prompt (${rules.length} rules, ${memories.length} memories)`);
 
 	const systemPrompt = buildSystemPrompt(memories);
 	const userPrompt = buildGroupingPrompt(request, rules);
 	const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
 
 	const output = await codex.runTurn(fullPrompt, GROUPING_SCHEMA);
-	const parsed = JSON.parse(output);
 
-	return {
-		suggestions: parsed.suggestions as GroupingSuggestion[],
-		reasoning: parsed.reasoning,
-	};
+	try {
+		const parsed = JSON.parse(output);
+		return {
+			suggestions: parsed.suggestions as GroupingSuggestion[],
+			reasoning: parsed.reasoning,
+		};
+	} catch (e) {
+		console.error("[organize] Failed to parse Codex output:", output.slice(0, 500));
+		throw new Error(`Failed to parse AI response: ${e instanceof Error ? e.message : e}`);
+	}
 }
 
 export async function analyzeCorrections(

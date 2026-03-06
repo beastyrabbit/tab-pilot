@@ -41,10 +41,17 @@ export const organizeRoute = new Hono();
 organizeRoute.post("/organize", zValidator("json", OrganizeRequestSchema), async (c) => {
 	try {
 		const body = c.req.valid("json");
+		console.log(
+			`[organize] Received ${body.tabs.length} tabs, ${body.existingGroups.length} groups, depth=${body.contentDepth}`,
+		);
 		const result = await organizeWithAI(body);
+		console.log(`[organize] Success: ${result.suggestions.length} suggestions`);
 		return c.json(result);
 	} catch (e) {
 		const message = e instanceof Error ? e.message : "Unknown error";
+		const stack = e instanceof Error ? e.stack : "";
+		console.error(`[organize] Error: ${message}`);
+		if (stack) console.error(stack);
 		return c.json({ error: message }, 500);
 	}
 });
