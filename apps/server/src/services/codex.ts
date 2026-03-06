@@ -214,6 +214,18 @@ class CodexAppServer {
 		return Promise.race([outputPromise, timeoutPromise]);
 	}
 
+	async listModels(): Promise<Array<{ id: string; name: string }>> {
+		await this.ensureRunning();
+		const result = (await this.send("model/list", {
+			limit: 50,
+			includeHidden: false,
+		})) as { models: Array<{ id: string; displayName: string; isDefault?: boolean }> };
+		return (result.models || []).map((m) => ({
+			id: m.id,
+			name: m.displayName || m.id,
+		}));
+	}
+
 	async shutdown(): Promise<void> {
 		if (this.proc && !this.proc.killed) {
 			this.proc.kill();
@@ -269,6 +281,10 @@ Return observations as short sentences (max 5).`;
 	} catch {
 		return [];
 	}
+}
+
+export async function getAvailableModels(): Promise<Array<{ id: string; name: string }>> {
+	return codex.listModels();
 }
 
 export async function checkCodexHealth(): Promise<boolean> {
