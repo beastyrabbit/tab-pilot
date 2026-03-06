@@ -12,8 +12,8 @@ const BRIDGE_URL = "http://localhost:7777/api";
 
 let cachedBridgeToken: string | null = null;
 
-async function getBridgeToken(): Promise<string> {
-	if (cachedBridgeToken) return cachedBridgeToken;
+async function getBridgeToken(forceRefresh = false): Promise<string> {
+	if (!forceRefresh && cachedBridgeToken) return cachedBridgeToken;
 	const res = await fetch(`${BRIDGE_URL}/content-bridge/token`);
 	const data = (await res.json()) as { token?: string };
 	cachedBridgeToken = data.token || "";
@@ -91,6 +91,32 @@ async function executeGetPageContent(args: {
 			},
 			body: JSON.stringify({ tabIds }),
 		});
+		// Retry once on 401 (stale token after server restart)
+		if (res.status === 401) {
+			const freshToken = await getBridgeToken(true);
+			const retry = await fetch(`${BRIDGE_URL}/content-bridge/request`, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					"X-Bridge-Token": freshToken,
+				},
+				body: JSON.stringify({ tabIds }),
+			});
+			if (!retry.ok) {
+				return `Failed to request content: ${await retry.text()}`;
+			}
+			const retryData = (await retry.json()) as { results: Record<string, string> };
+			const retryResults: string[] = [];
+			for (const tabId of tabIds) {
+				const content = retryData.results[String(tabId)];
+				retryResults.push(
+					content
+						? `[Tab ${tabId}]: ${content.slice(0, 2000)}`
+						: `[Tab ${tabId}]: (content unavailable)`,
+				);
+			}
+			return retryResults.join("\n\n");
+		}
 		if (!res.ok) {
 			const err = await res.text();
 			return `Failed to request content: ${err}`;

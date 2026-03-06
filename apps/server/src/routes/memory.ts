@@ -33,15 +33,17 @@ memoryRoute.post("/memory/ai-edit", zValidator("json", AiEditSchema), async (c) 
 	return c.json({ memories: updatedMemories, summary: result.summary });
 });
 
-memoryRoute.put("/memory/:id", async (c) => {
+const UpdateMemorySchema = z.object({
+	observation: z.string().min(1).max(2000),
+});
+
+memoryRoute.put("/memory/:id", zValidator("json", UpdateMemorySchema), (c) => {
 	const id = c.req.param("id");
-	const body = await c.req.json();
+	const { observation } = c.req.valid("json");
 	const memories = storage.getMemories();
 	const index = memories.findIndex((m) => m.id === id);
 	if (index === -1) return c.json({ error: "Memory not found" }, 404);
-	if (typeof body.observation === "string") {
-		memories[index].observation = body.observation;
-	}
+	memories[index].observation = observation;
 	storage.saveMemories(memories);
 	return c.json(memories[index]);
 });
