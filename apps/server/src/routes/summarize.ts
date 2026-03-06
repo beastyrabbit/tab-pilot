@@ -18,11 +18,11 @@ const SummarizeRequestSchema = z.object({
 });
 
 const CacheCheckSchema = z.object({
-	urls: z.array(z.string()),
+	urls: z.array(z.string()).max(500),
 });
 
 const SummaryLookupSchema = z.object({
-	urls: z.array(z.string()),
+	urls: z.array(z.string()).max(500),
 });
 
 export const summarizeRoute = new Hono();

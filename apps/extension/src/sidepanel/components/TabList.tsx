@@ -9,7 +9,7 @@ import {
 } from "@dnd-kit/core";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import type { TabGroupInfo, TabInfo } from "@tab-orga/shared";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { extractTabContent } from "../services/chromeContentApi.js";
 import { getCachedSummaries } from "../services/screenshotCache.js";
 import { CHROME_GROUP_COLORS } from "../utils/chromeColors.js";
@@ -72,12 +72,15 @@ function useTabSearch(tabs: TabInfo[]) {
 		setIndexing(false);
 	}, [tabs]);
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: intentionally reset only when tab count changes
+	// Stable key that changes when tab identity (id or url) changes
+	const tabIdentityKey = useMemo(() => tabs.map((t) => `${t.id}:${t.url}`).join("|"), [tabs]);
+
+	// biome-ignore lint/correctness/useExhaustiveDependencies: reset index when tab identity changes, not on every render
 	useEffect(() => {
 		indexedRef.current = false;
 		setContentCache(new Map());
 		setSummaryCache(new Map());
-	}, [tabs.length]);
+	}, [tabIdentityKey]);
 
 	const handleQueryChange = useCallback(
 		(q: string) => {
