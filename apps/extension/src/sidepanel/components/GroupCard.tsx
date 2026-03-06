@@ -36,8 +36,8 @@ export function GroupCard({
 	};
 
 	return (
-		<div className={`border-l-2 ${colorClass} rounded-r-lg bg-white`}>
-			<div className="flex items-center justify-between px-2 py-1.5 hover:bg-gray-50 group/card">
+		<div className={`border-l-2 ${colorClass} rounded-r-lg bg-white dark:bg-gray-800`}>
+			<div className="flex items-center justify-between px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700/50 group/card">
 				{editing ? (
 					<input
 						type="text"
@@ -48,7 +48,7 @@ export function GroupCard({
 							if (e.key === "Enter") handleRename();
 							if (e.key === "Escape") setEditing(false);
 						}}
-						className="text-xs font-semibold text-gray-700 border-b border-blue-500 outline-none bg-transparent w-full"
+						className="text-xs font-semibold text-gray-700 dark:text-gray-200 border-b border-blue-500 outline-none bg-transparent w-full"
 						autoFocus
 					/>
 				) : (
@@ -57,7 +57,7 @@ export function GroupCard({
 						onClick={() => setCollapsed(!collapsed)}
 						className="flex-1 text-left"
 					>
-						<span className="text-xs font-semibold text-gray-700">
+						<span className="text-xs font-semibold text-gray-700 dark:text-gray-200">
 							{group.title || "Untitled"} ({groupTabs.length})
 						</span>
 					</button>
@@ -67,7 +67,7 @@ export function GroupCard({
 						<button
 							type="button"
 							onClick={() => setEditing(true)}
-							className="invisible group-hover/card:visible text-gray-400 hover:text-gray-600 p-0.5"
+							className="invisible group-hover/card:visible text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 p-0.5"
 							title="Rename"
 						>
 							<svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -84,7 +84,7 @@ export function GroupCard({
 						<button
 							type="button"
 							onClick={() => onDelete(group.id)}
-							className="invisible group-hover/card:visible text-gray-400 hover:text-red-500 p-0.5"
+							className="invisible group-hover/card:visible text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 p-0.5"
 							title="Ungroup all"
 						>
 							<svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -97,7 +97,9 @@ export function GroupCard({
 							</svg>
 						</button>
 					)}
-					<span className="text-[10px] text-gray-400 ml-1">{collapsed ? "+" : "-"}</span>
+					<span className="text-[10px] text-gray-400 dark:text-gray-500 ml-1">
+						{collapsed ? "+" : "-"}
+					</span>
 				</div>
 			</div>
 			{!collapsed && (

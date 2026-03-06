@@ -20,15 +20,17 @@ export function TabItem({ tab, groups, onMoveToGroup, onUngroup }: TabItemProps)
 	})();
 
 	return (
-		<div className="flex items-center gap-2 py-1.5 px-2 rounded hover:bg-gray-100 group/tab relative">
+		<div className="flex items-center gap-2 py-1.5 px-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700/50 group/tab relative">
 			{tab.favIconUrl ? (
 				<img src={tab.favIconUrl} alt="" className="w-4 h-4 flex-shrink-0" />
 			) : (
-				<div className="w-4 h-4 flex-shrink-0 bg-gray-300 rounded" />
+				<div className="w-4 h-4 flex-shrink-0 bg-gray-300 dark:bg-gray-600 rounded" />
 			)}
 			<div className="min-w-0 flex-1">
-				<div className="text-xs font-medium text-gray-900 truncate">{tab.title}</div>
-				<div className="text-[10px] text-gray-400 truncate">{domain}</div>
+				<div className="text-xs font-medium text-gray-900 dark:text-gray-100 truncate">
+					{tab.title}
+				</div>
+				<div className="text-[10px] text-gray-400 dark:text-gray-500 truncate">{domain}</div>
 			</div>
 
 			{groups && groups.length > 0 && onMoveToGroup && (
@@ -36,7 +38,7 @@ export function TabItem({ tab, groups, onMoveToGroup, onUngroup }: TabItemProps)
 					<button
 						type="button"
 						onClick={() => setShowMenu(!showMenu)}
-						className="invisible group-hover/tab:visible text-gray-400 hover:text-gray-600 p-0.5"
+						className="invisible group-hover/tab:visible text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 p-0.5"
 						title="Move to group"
 					>
 						<svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -49,7 +51,7 @@ export function TabItem({ tab, groups, onMoveToGroup, onUngroup }: TabItemProps)
 						</svg>
 					</button>
 					{showMenu && (
-						<div className="absolute right-0 top-full mt-1 w-36 bg-white border rounded-lg shadow-lg z-20 py-1">
+						<div className="absolute right-0 top-full mt-1 w-36 bg-white dark:bg-gray-700 border dark:border-gray-600 rounded-lg shadow-lg z-20 py-1">
 							{groups
 								.filter((g) => g.id !== tab.groupId)
 								.map((g) => (
@@ -60,7 +62,7 @@ export function TabItem({ tab, groups, onMoveToGroup, onUngroup }: TabItemProps)
 											onMoveToGroup(tab.id, g.id);
 											setShowMenu(false);
 										}}
-										className="w-full text-left px-3 py-1 text-[10px] hover:bg-gray-100 text-gray-700"
+										className="w-full text-left px-3 py-1 text-[10px] hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200"
 									>
 										{g.title || "Untitled"}
 									</button>
@@ -72,7 +74,7 @@ export function TabItem({ tab, groups, onMoveToGroup, onUngroup }: TabItemProps)
 										onUngroup(tab.id);
 										setShowMenu(false);
 									}}
-									className="w-full text-left px-3 py-1 text-[10px] hover:bg-gray-100 text-red-600 border-t"
+									className="w-full text-left px-3 py-1 text-[10px] hover:bg-gray-100 dark:hover:bg-gray-600 text-red-600 dark:text-red-400 border-t dark:border-gray-600"
 								>
 									Remove from group
 								</button>

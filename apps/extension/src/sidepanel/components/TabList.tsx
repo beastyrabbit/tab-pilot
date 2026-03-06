@@ -52,7 +52,7 @@ export function TabList({
 
 			{ungroupedTabs.length > 0 && (
 				<div>
-					<div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1 px-1">
+					<div className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1 px-1">
 						Ungrouped ({ungroupedTabs.length})
 					</div>
 					{ungroupedTabs.map((tab) => (
