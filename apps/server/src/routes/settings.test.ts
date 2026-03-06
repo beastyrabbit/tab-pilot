@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../services/storage.js", () => {
 	let settings = {
-		model: "o3",
+		model: "gpt-5.3-codex",
 		contentDepth: "meta" as const,
 		port: 7777,
 	};

@@ -27,7 +27,7 @@ function writeJson<T>(filename: string, data: T): void {
 }
 
 const DEFAULT_SETTINGS: ServerSettings = {
-	model: "o3",
+	model: "gpt-5.3-codex",
 	contentDepth: "meta",
 	port: 7777,
 };

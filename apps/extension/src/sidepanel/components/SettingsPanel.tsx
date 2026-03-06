@@ -17,15 +17,18 @@ export function SettingsPanel({
 	onUpdate,
 	onClose,
 }: SettingsPanelProps) {
-	const [model, setModel] = useState(settings?.model || "o3");
+	const [model, setModel] = useState(settings?.model || "gpt-5.3-codex");
 	const [contentDepth, setContentDepth] = useState<ContentDepth>(settings?.contentDepth || "meta");
-	const [models, setModels] = useState<ModelInfo[]>([]);
+	const fallbackModel = settings?.model || "gpt-5.3-codex";
+	const [models, setModels] = useState<ModelInfo[]>([{ id: fallbackModel, name: fallbackModel }]);
 	const [saving, setSaving] = useState(false);
 
 	useEffect(() => {
 		serverApi
 			.getModels()
-			.then((res) => setModels(res.models))
+			.then((res) => {
+				if (res.models.length > 0) setModels(res.models);
+			})
 			.catch(() => {});
 	}, []);
 
@@ -49,26 +52,17 @@ export function SettingsPanel({
 						<label className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
 							Model
 						</label>
-						{models.length > 0 ? (
-							<select
-								value={model}
-								onChange={(e) => setModel(e.target.value)}
-								className="mt-1 w-full px-2 py-1.5 text-xs border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200"
-							>
-								{models.map((m) => (
-									<option key={m.id} value={m.id}>
-										{m.name}
-									</option>
-								))}
-							</select>
-						) : (
-							<input
-								type="text"
-								value={model}
-								onChange={(e) => setModel(e.target.value)}
-								className="mt-1 w-full px-2 py-1.5 text-xs border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200"
-							/>
-						)}
+						<select
+							value={model}
+							onChange={(e) => setModel(e.target.value)}
+							className="mt-1 w-full px-2 py-1.5 text-xs border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200"
+						>
+							{models.map((m) => (
+								<option key={m.id} value={m.id}>
+									{m.name}
+								</option>
+							))}
+						</select>
 					</div>
 
 					<div>
