@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "Tab Organizer",
+  "description": "AI-powered tab organizer that groups your browser tabs intelligently",
+  "version": "0.1.0",
+  "permissions": [
+    "tabs",
+    "tabGroups",
+    "activeTab",
+    "sidePanel",
+    "scripting"
+  ],
+  "action": {
+    "default_title": "Open Tab Organizer"
+  },
+  "side_panel": {
+    "default_path": "src/sidepanel/index.html"
+  },
+  "background": {
+    "service_worker": "service-worker.js",
+    "type": "module"
+  },
+  "content_scripts": [],
+  "icons": {}
+}

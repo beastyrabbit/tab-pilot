@@ -1,0 +1,26 @@
+{
+  "name": "beasty-tab-orga",
+  "private": true,
+  "scripts": {
+    "dev:server": "pnpm --filter @tab-orga/server dev",
+    "dev:extension": "pnpm --filter @tab-orga/extension dev",
+    "build": "pnpm -r build",
+    "build:server": "pnpm --filter @tab-orga/server build",
+    "build:extension": "pnpm --filter @tab-orga/extension build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  },
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  },
+  "packageManager": "pnpm@9.15.4"
+}

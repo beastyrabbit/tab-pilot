@@ -1,0 +1,22 @@
+node_modules/
+dist/
+.turbo/
+*.tsbuildinfo
+
+# Server runtime data
+apps/server/data/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

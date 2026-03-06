@@ -1,0 +1,11 @@
+pre-commit:
+  parallel: true
+  commands:
+    gitleaks:
+      run: gitleaks protect --staged --no-banner
+    biome-check:
+      run: pnpm biome check --staged --no-errors-on-unmatched
+    typecheck:
+      run: pnpm -r exec tsc --noEmit
+    test:
+      run: pnpm test
