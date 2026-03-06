@@ -21,11 +21,14 @@ export function useSettings() {
 		refresh();
 	}, [refresh]);
 
-	const update = useCallback(async (partial: Partial<{ model: string; contentDepth: string }>) => {
-		const s = await serverApi.updateSettings(partial);
-		setSettings(s);
-		return s;
-	}, []);
+	const update = useCallback(
+		async (partial: Partial<{ model: string; contentDepth: string; generalPrompt: string }>) => {
+			const s = await serverApi.updateSettings(partial);
+			setSettings(s);
+			return s;
+		},
+		[],
+	);
 
 	return { settings, loading, update, refresh };
 }

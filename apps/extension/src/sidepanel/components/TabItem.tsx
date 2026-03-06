@@ -1,6 +1,42 @@
 import type { TabGroupInfo, TabInfo } from "@tab-orga/shared";
 import { useState } from "react";
 
+function Favicon({
+	url,
+	pageUrl,
+	className,
+}: { url?: string; pageUrl?: string; className?: string }) {
+	const [failed, setFailed] = useState(false);
+	const [googleFailed, setGoogleFailed] = useState(false);
+
+	const googleFaviconUrl = (() => {
+		if (!pageUrl) return null;
+		try {
+			const domain = new URL(pageUrl).hostname;
+			return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+		} catch {
+			return null;
+		}
+	})();
+
+	if ((!url || failed) && (!googleFaviconUrl || googleFailed)) {
+		return <div className={`${className} bg-gray-300 dark:bg-gray-600 rounded`} />;
+	}
+
+	if (!url || failed) {
+		return (
+			<img
+				src={googleFaviconUrl!}
+				alt=""
+				className={className}
+				onError={() => setGoogleFailed(true)}
+			/>
+		);
+	}
+
+	return <img src={url} alt="" className={className} onError={() => setFailed(true)} />;
+}
+
 interface TabItemProps {
 	tab: TabInfo;
 	groups?: TabGroupInfo[];
@@ -21,16 +57,12 @@ export function TabItem({ tab, groups, onMoveToGroup, onUngroup }: TabItemProps)
 
 	return (
 		<div className="flex items-center gap-2 py-1.5 px-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700/50 group/tab relative">
-			{tab.favIconUrl ? (
-				<img src={tab.favIconUrl} alt="" className="w-4 h-4 flex-shrink-0" />
-			) : (
-				<div className="w-4 h-4 flex-shrink-0 bg-gray-300 dark:bg-gray-600 rounded" />
-			)}
+			<Favicon url={tab.favIconUrl} pageUrl={tab.url} className="w-4 h-4 flex-shrink-0" />
 			<div className="min-w-0 flex-1">
-				<div className="text-xs font-medium text-gray-900 dark:text-gray-100 truncate">
+				<div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
 					{tab.title}
 				</div>
-				<div className="text-[10px] text-gray-400 dark:text-gray-500 truncate">{domain}</div>
+				<div className="text-xs text-gray-400 dark:text-gray-500 truncate">{domain}</div>
 			</div>
 
 			{groups && groups.length > 0 && onMoveToGroup && (

@@ -6,22 +6,24 @@ interface GroupCardProps {
 	group: TabGroupInfo;
 	tabs: TabInfo[];
 	allGroups: TabGroupInfo[];
-	colorClass: string;
+	borderColor: string;
 	onRename?: (groupId: number, title: string) => void;
 	onDelete?: (groupId: number) => void;
 	onMoveTab?: (tabId: number, groupId: number) => void;
 	onUngroupTab?: (tabId: number) => void;
+	renderTab?: (tab: TabInfo) => React.ReactNode;
 }
 
 export function GroupCard({
 	group,
 	tabs,
 	allGroups,
-	colorClass,
+	borderColor,
 	onRename,
 	onDelete,
 	onMoveTab,
 	onUngroupTab,
+	renderTab,
 }: GroupCardProps) {
 	const [collapsed, setCollapsed] = useState(group.collapsed);
 	const [editing, setEditing] = useState(false);
@@ -36,7 +38,10 @@ export function GroupCard({
 	};
 
 	return (
-		<div className={`border-l-2 ${colorClass} rounded-r-lg bg-white dark:bg-gray-800`}>
+		<div
+			className="border-l-2 rounded-r-lg bg-white dark:bg-gray-800"
+			style={{ borderLeftColor: borderColor }}
+		>
 			<div className="flex items-center justify-between px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700/50 group/card">
 				{editing ? (
 					<input
@@ -98,21 +103,25 @@ export function GroupCard({
 						</button>
 					)}
 					<span className="text-[10px] text-gray-400 dark:text-gray-500 ml-1">
-						{collapsed ? "+" : "-"}
+						{collapsed ? "+" : "\u2212"}
 					</span>
 				</div>
 			</div>
 			{!collapsed && (
 				<div className="pb-1">
-					{groupTabs.map((tab) => (
-						<TabItem
-							key={tab.id}
-							tab={tab}
-							groups={allGroups}
-							onMoveToGroup={onMoveTab}
-							onUngroup={onUngroupTab}
-						/>
-					))}
+					{groupTabs.map((tab) =>
+						renderTab ? (
+							<span key={tab.id}>{renderTab(tab)}</span>
+						) : (
+							<TabItem
+								key={tab.id}
+								tab={tab}
+								groups={allGroups}
+								onMoveToGroup={onMoveTab}
+								onUngroup={onUngroupTab}
+							/>
+						),
+					)}
 				</div>
 			)}
 		</div>

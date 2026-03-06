@@ -4,13 +4,16 @@ import { storage } from "../services/storage.js";
 
 export const settingsRoute = new Hono();
 
-settingsRoute.get("/settings", (c) => {
-	const settings = storage.getSettings();
-	const publicSettings: PublicSettings = {
+function toPublic(settings: ReturnType<typeof storage.getSettings>): PublicSettings {
+	return {
 		model: settings.model,
 		contentDepth: settings.contentDepth,
+		generalPrompt: settings.generalPrompt,
 	};
-	return c.json(publicSettings);
+}
+
+settingsRoute.get("/settings", (c) => {
+	return c.json(toPublic(storage.getSettings()));
 });
 
 settingsRoute.put("/settings", async (c) => {
@@ -19,11 +22,7 @@ settingsRoute.put("/settings", async (c) => {
 
 	if (body.model !== undefined) update.model = body.model;
 	if (body.contentDepth !== undefined) update.contentDepth = body.contentDepth;
+	if (body.generalPrompt !== undefined) update.generalPrompt = body.generalPrompt;
 
-	const settings = storage.updateSettings(update);
-	const publicSettings: PublicSettings = {
-		model: settings.model,
-		contentDepth: settings.contentDepth,
-	};
-	return c.json(publicSettings);
+	return c.json(toPublic(storage.updateSettings(update)));
 });

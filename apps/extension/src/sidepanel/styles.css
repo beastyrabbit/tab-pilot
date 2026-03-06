@@ -2,6 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+html,
+body,
+#root {
+	width: 100%;
+	min-height: 100vh;
+}
+
 body {
 	@apply text-sm text-gray-900 dark:text-gray-100;
 }

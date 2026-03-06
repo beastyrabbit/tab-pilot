@@ -1,4 +1,5 @@
 import type {
+	AIEditMemoriesResponse,
 	AIMemory,
 	ErrorResponse,
 	HealthResponse,
@@ -7,6 +8,8 @@ import type {
 	OrganizeRequest,
 	OrganizeResponse,
 	PublicSettings,
+	RefineRequest,
+	RefineResponse,
 	UserRule,
 } from "@tab-orga/shared";
 
@@ -36,6 +39,13 @@ export const serverApi = {
 		});
 	},
 
+	refine(body: RefineRequest): Promise<RefineResponse> {
+		return request("/organize/refine", {
+			method: "POST",
+			body: JSON.stringify(body),
+		});
+	},
+
 	learn(body: LearnRequest): Promise<void> {
 		return request("/organize/learn", {
 			method: "POST",
@@ -48,7 +58,7 @@ export const serverApi = {
 	},
 
 	updateSettings(
-		settings: Partial<{ model: string; contentDepth: string }>,
+		settings: Partial<{ model: string; contentDepth: string; generalPrompt: string }>,
 	): Promise<PublicSettings> {
 		return request("/settings", {
 			method: "PUT",
@@ -86,11 +96,65 @@ export const serverApi = {
 		return request("/memory");
 	},
 
+	updateMemory(id: string, observation: string): Promise<AIMemory> {
+		return request(`/memory/${id}`, {
+			method: "PUT",
+			body: JSON.stringify({ observation }),
+		});
+	},
+
 	deleteMemory(id: string): Promise<void> {
 		return request(`/memory/${id}`, { method: "DELETE" });
 	},
 
 	clearMemories(): Promise<void> {
 		return request("/memory", { method: "DELETE" });
+	},
+
+	aiEditMemories(instruction: string): Promise<AIEditMemoriesResponse> {
+		return request("/memory/ai-edit", {
+			method: "POST",
+			body: JSON.stringify({ instruction }),
+		});
+	},
+
+	async summarize(
+		screenshots: Array<{ tabId: number; image: string; title: string; url: string }>,
+	): Promise<{ summaries: Array<{ tabId: number; summary: string }> }> {
+		// Send in batches of 4 to avoid huge payloads
+		const batchSize = 4;
+		const allSummaries: Array<{ tabId: number; summary: string }> = [];
+
+		for (let i = 0; i < screenshots.length; i += batchSize) {
+			const batch = screenshots.slice(i, i + batchSize);
+			const result = await request<{ summaries: Array<{ tabId: number; summary: string }> }>(
+				"/summarize",
+				{
+					method: "POST",
+					body: JSON.stringify({ screenshots: batch }),
+				},
+			);
+			allSummaries.push(...result.summaries);
+		}
+
+		return { summaries: allSummaries };
+	},
+
+	/** Ask server which URLs already have cached summaries. */
+	async checkCachedUrls(urls: string[]): Promise<Set<string>> {
+		const result = await request<{ cached: string[] }>("/summarize/check", {
+			method: "POST",
+			body: JSON.stringify({ urls }),
+		});
+		return new Set(result.cached);
+	},
+
+	/** Get cached summaries by URL from server. */
+	async lookupSummaries(urls: string[]): Promise<Record<string, string>> {
+		const result = await request<{ summaries: Record<string, string> }>("/summarize/lookup", {
+			method: "POST",
+			body: JSON.stringify({ urls }),
+		});
+		return result.summaries;
 	},
 };

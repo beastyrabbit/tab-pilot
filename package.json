@@ -2,7 +2,7 @@
   "name": "beasty-tab-orga",
   "private": true,
   "scripts": {
-    "dev": "pnpm build:extension && pnpm dev:server & sleep 1 && chromium --load-extension=apps/extension/dist",
+    "dev": "pnpm build:extension && pnpm dev:server",
     "dev:server": "pnpm --filter @tab-orga/server dev",
     "dev:extension": "pnpm --filter @tab-orga/extension dev",
     "build": "pnpm -r build",

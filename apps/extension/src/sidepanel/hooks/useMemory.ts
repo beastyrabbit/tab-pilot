@@ -20,6 +20,14 @@ export function useMemory() {
 		refresh();
 	}, [refresh]);
 
+	const update = useCallback(
+		async (id: string, observation: string) => {
+			await serverApi.updateMemory(id, observation);
+			refresh();
+		},
+		[refresh],
+	);
+
 	const remove = useCallback(
 		async (id: string) => {
 			await serverApi.deleteMemory(id);
@@ -33,5 +41,14 @@ export function useMemory() {
 		refresh();
 	}, [refresh]);
 
-	return { memories, loading, remove, clearAll, refresh };
+	const aiEdit = useCallback(
+		async (instruction: string) => {
+			const result = await serverApi.aiEditMemories(instruction);
+			refresh();
+			return result.summary;
+		},
+		[refresh],
+	);
+
+	return { memories, loading, update, remove, clearAll, aiEdit, refresh };
 }

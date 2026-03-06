@@ -1,11 +1,13 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { contentBridgeRoute } from "./routes/content-bridge.js";
 import { healthRoute } from "./routes/health.js";
 import { memoryRoute } from "./routes/memory.js";
 import { modelsRoute } from "./routes/models.js";
 import { organizeRoute } from "./routes/organize.js";
 import { rulesRoute } from "./routes/rules.js";
 import { settingsRoute } from "./routes/settings.js";
+import { summarizeRoute } from "./routes/summarize.js";
 
 export const app = new Hono();
 
@@ -23,3 +25,5 @@ app.route("/api", settingsRoute);
 app.route("/api", modelsRoute);
 app.route("/api", rulesRoute);
 app.route("/api", memoryRoute);
+app.route("/api", contentBridgeRoute);
+app.route("/api", summarizeRoute);

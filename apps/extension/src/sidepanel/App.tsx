@@ -1,20 +1,23 @@
 import { useState } from "react";
-import { GroupProposal } from "./components/GroupProposal.js";
 import { MemoryManager } from "./components/MemoryManager.js";
 import { OrganizeButton } from "./components/OrganizeButton.js";
-import { RuleEditor } from "./components/RuleEditor.js";
+import { ProposalView } from "./components/ProposalView.js";
 import { SettingsPanel } from "./components/SettingsPanel.js";
 import { TabList } from "./components/TabList.js";
 import { useMemory } from "./hooks/useMemory.js";
 import { useOrganize } from "./hooks/useOrganize.js";
-import { useRules } from "./hooks/useRules.js";
 import { useServerHealth } from "./hooks/useServerHealth.js";
 import { useSettings } from "./hooks/useSettings.js";
 import { useTabs } from "./hooks/useTabs.js";
 import { useTestMode } from "./hooks/useTestMode.js";
-import { moveTabToGroup, ungroupTabs, updateGroup } from "./services/chromeTabsApi.js";
+import {
+	collapseAndReorderGroups,
+	moveTabToGroup,
+	ungroupTabs,
+	updateGroup,
+} from "./services/chromeTabsApi.js";
 
-type Panel = "settings" | "rules" | "memory" | null;
+type Panel = "settings" | "memory" | null;
 
 export function App() {
 	const { status, codexConnected } = useServerHealth();
@@ -24,22 +27,37 @@ export function App() {
 		suggestions,
 		reasoning,
 		loading: organizing,
+		refining,
 		error,
+		originalGroupIds,
+		scanProgress,
 		organize,
+		refine,
 		applySuggestions,
 		dismiss,
 	} = useOrganize();
-	const { rules, create: createRule, update: updateRule, remove: removeRule } = useRules();
-	const { memories, remove: removeMemory, clearAll: clearMemories } = useMemory();
+	const {
+		memories,
+		update: updateMemory,
+		remove: removeMemory,
+		clearAll: clearMemories,
+		aiEdit: aiEditMemories,
+		refresh: refreshMemories,
+	} = useMemory();
 	const { testMode, toggle: toggleTestMode } = useTestMode();
 	const [activePanel, setActivePanel] = useState<Panel>(null);
 
 	const handleOrganize = () => organize(tabs, groups, settings?.contentDepth);
 
 	const handleApply = async (applied: typeof suggestions) => {
-		if (!applied) return;
-		await applySuggestions(applied, tabs);
+		if (!applied || testMode) return;
+		await applySuggestions(applied);
 		refresh();
+	};
+
+	const handleRefine = async (feedback: string, targetGroupName?: string, targetTabId?: number) => {
+		await refine(feedback, targetGroupName, targetTabId);
+		refreshMemories();
 	};
 
 	const handleRenameGroup = async (groupId: number, title: string) => {
@@ -51,71 +69,63 @@ export function App() {
 		const group = groups.find((g) => g.id === groupId);
 		if (group) {
 			await ungroupTabs(group.tabIds);
+			await collapseAndReorderGroups();
 			refresh();
 		}
 	};
 
 	const handleMoveTab = async (tabId: number, groupId: number) => {
 		await moveTabToGroup(tabId, groupId);
+		await collapseAndReorderGroups();
 		refresh();
 	};
 
 	const handleUngroupTab = async (tabId: number) => {
 		await ungroupTabs([tabId]);
+		await collapseAndReorderGroups();
 		refresh();
 	};
 
+	const handleDissolveAllGroups = async () => {
+		const allGroupedTabIds = groups.flatMap((g) => g.tabIds);
+		if (allGroupedTabIds.length > 0) {
+			await ungroupTabs(allGroupedTabIds);
+			refresh();
+		}
+	};
+
+	const inProposalMode = suggestions !== null;
+
 	return (
-		<div className="p-4 min-h-screen bg-gray-50 dark:bg-gray-900">
-			{/* Header */}
-			<div className="flex items-center justify-between mb-3">
-				<h1 className="text-lg font-bold text-gray-900 dark:text-gray-100">Tab Organizer</h1>
-				<div className="flex items-center gap-1">
+		<div className="p-3 min-h-screen bg-gray-50 dark:bg-gray-900">
+			{/* Header — single row: Organize button + status + icons */}
+			<div className="flex items-center gap-2 mb-3">
+				<OrganizeButton
+					onClick={handleOrganize}
+					loading={organizing}
+					disabled={status !== "online" || !codexConnected || tabs.length === 0 || inProposalMode}
+				/>
+				<div className="flex items-center gap-1 flex-shrink-0">
 					<span
-						className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full ${
+						className={`w-2 h-2 rounded-full ${
 							status === "online"
-								? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400"
+								? "bg-green-500"
 								: status === "offline"
-									? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400"
-									: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-400"
+									? "bg-red-500"
+									: "bg-yellow-500"
 						}`}
-					>
-						<span
-							className={`w-1.5 h-1.5 rounded-full ${
-								status === "online"
-									? "bg-green-500"
-									: status === "offline"
-										? "bg-red-500"
-										: "bg-yellow-500"
-							}`}
-						/>
-						{status === "checking" ? "..." : status}
-					</span>
+						title={status === "checking" ? "..." : status}
+					/>
 					{testMode && (
-						<span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">
+						<span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">
 							test
 						</span>
 					)}
 					<button
 						type="button"
-						onClick={() => setActivePanel("rules")}
-						className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 p-1"
-						title="Rules"
-					>
-						<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path
-								strokeLinecap="round"
-								strokeLinejoin="round"
-								strokeWidth={2}
-								d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-							/>
-						</svg>
-					</button>
-					<button
-						type="button"
 						onClick={() => setActivePanel("memory")}
 						className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 p-1"
-						title="Memory"
+						title="Memories"
 					>
 						<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 							<path
@@ -150,49 +160,56 @@ export function App() {
 				</div>
 			</div>
 
-			{/* Offline banner */}
+			{/* Banners */}
 			{status === "offline" && (
-				<div className="bg-red-50 border border-red-200 rounded-lg p-2 mb-3 text-red-700 text-[10px] dark:bg-red-900/30 dark:border-red-800 dark:text-red-400">
+				<div className="bg-red-50 border border-red-200 rounded-lg p-2.5 mb-3 text-red-700 text-xs dark:bg-red-900/30 dark:border-red-800 dark:text-red-400">
 					Server offline. Run <code className="font-mono">pnpm dev:server</code>
 				</div>
 			)}
-
-			{/* Codex not connected banner */}
 			{status === "online" && !codexConnected && (
-				<div className="bg-amber-50 border border-amber-200 rounded-lg p-2 mb-3 text-amber-700 text-[10px] dark:bg-amber-900/30 dark:border-amber-800 dark:text-amber-400">
-					Codex backend not connected. Ensure <code className="font-mono">codex</code> CLI is
-					installed and available in PATH.
+				<div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 mb-3 text-amber-700 text-xs dark:bg-amber-900/30 dark:border-amber-800 dark:text-amber-400">
+					Codex not connected. Ensure <code className="font-mono">codex</code> CLI is in PATH.
 				</div>
 			)}
-
-			{/* Error banner */}
 			{error && (
-				<div className="bg-red-50 border border-red-200 rounded-lg p-2 mb-3 text-red-700 text-[10px] dark:bg-red-900/30 dark:border-red-800 dark:text-red-400">
+				<div className="bg-red-50 border border-red-200 rounded-lg p-2.5 mb-3 text-red-700 text-xs dark:bg-red-900/30 dark:border-red-800 dark:text-red-400">
 					{error}
 				</div>
 			)}
 
-			{/* Organize button */}
-			<div className="mb-3">
-				<OrganizeButton
-					onClick={handleOrganize}
-					loading={organizing}
-					disabled={status !== "online" || !codexConnected || tabs.length === 0}
-				/>
-			</div>
-
-			{/* Tab count + rule count */}
-			{!tabsLoading && (
-				<div className="text-[10px] text-gray-400 dark:text-gray-500 mb-2">
-					{tabs.length} tabs{groups.length > 0 ? ` in ${groups.length} groups` : ""}
-					{rules.length > 0 ? ` | ${rules.length} rules` : ""}
-					{memories.length > 0 ? ` | ${memories.length} memories` : ""}
+			{/* Screenshot scan progress */}
+			{scanProgress && scanProgress.phase !== "done" && (
+				<div className="flex items-center gap-1.5 text-[10px] text-blue-600 dark:text-blue-400 mb-2">
+					<span className="w-2.5 h-2.5 border-2 border-blue-400/30 border-t-blue-400 rounded-full animate-spin" />
+					{scanProgress.phase === "capturing"
+						? `Scanning tabs ${scanProgress.done}/${scanProgress.total}`
+						: `AI summarizing ${scanProgress.done}/${scanProgress.total}`}
 				</div>
 			)}
 
-			{/* Tab list */}
-			{tabsLoading ? (
-				<div className="text-xs text-gray-400 dark:text-gray-500 text-center py-8">
+			{/* Tab count */}
+			{!tabsLoading && !inProposalMode && (
+				<div className="text-xs text-gray-400 dark:text-gray-500 mb-2">
+					{tabs.length} tabs{groups.length > 0 ? ` · ${groups.length} groups` : ""}
+					{memories.length > 0 ? ` · ${memories.length} memories` : ""}
+				</div>
+			)}
+
+			{/* Main content: either proposal view or current tabs */}
+			{inProposalMode ? (
+				<ProposalView
+					suggestions={suggestions}
+					reasoning={reasoning}
+					tabs={tabs}
+					originalGroupIds={originalGroupIds}
+					refining={refining}
+					testMode={testMode}
+					onRefine={handleRefine}
+					onApply={handleApply}
+					onDismiss={dismiss}
+				/>
+			) : tabsLoading ? (
+				<div className="text-sm text-gray-400 dark:text-gray-500 text-center py-8">
 					Loading tabs...
 				</div>
 			) : (
@@ -206,18 +223,6 @@ export function App() {
 				/>
 			)}
 
-			{/* Group proposal overlay */}
-			{suggestions && (
-				<GroupProposal
-					suggestions={suggestions}
-					reasoning={reasoning}
-					tabs={tabs}
-					testMode={testMode}
-					onApply={handleApply}
-					onDismiss={dismiss}
-				/>
-			)}
-
 			{/* Settings panel */}
 			{activePanel === "settings" && (
 				<SettingsPanel
@@ -225,17 +230,7 @@ export function App() {
 					testMode={testMode}
 					onToggleTestMode={toggleTestMode}
 					onUpdate={updateSettings}
-					onClose={() => setActivePanel(null)}
-				/>
-			)}
-
-			{/* Rules panel */}
-			{activePanel === "rules" && (
-				<RuleEditor
-					rules={rules}
-					onCreate={createRule}
-					onUpdate={updateRule}
-					onDelete={removeRule}
+					onDissolveAllGroups={handleDissolveAllGroups}
 					onClose={() => setActivePanel(null)}
 				/>
 			)}
@@ -244,8 +239,10 @@ export function App() {
 			{activePanel === "memory" && (
 				<MemoryManager
 					memories={memories}
+					onUpdate={updateMemory}
 					onDelete={removeMemory}
 					onClearAll={clearMemories}
+					onAIEdit={aiEditMemories}
 					onClose={() => setActivePanel(null)}
 				/>
 			)}

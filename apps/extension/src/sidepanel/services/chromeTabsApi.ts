@@ -56,3 +56,61 @@ export async function moveTabToGroup(tabId: number, groupId: number): Promise<vo
 	if (!isChromeExtension) return;
 	await chrome.tabs.group({ tabIds: [tabId], groupId });
 }
+
+const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Reorder groups to the left of the tab strip, then collapse them.
+ *
+ * Uses chrome.tabGroups.move() which moves entire groups at once and
+ * preserves all metadata (title, color) — unlike chrome.tabs.move()
+ * which can cause Chrome to reset group properties.
+ */
+export async function collapseAndReorderGroups(): Promise<void> {
+	if (!isChromeExtension) return;
+
+	const allGroups = await chrome.tabGroups.query({
+		windowId: chrome.windows.WINDOW_ID_CURRENT,
+	});
+
+	console.log(`[reorder] ${allGroups.length} groups to reorder`);
+	for (const g of allGroups) {
+		console.log(`[reorder]   gid=${g.id} title="${g.title}" color="${g.color}"`);
+	}
+
+	// 1. Move each group to the left of the tab strip
+	let leftIndex = 0;
+	for (const group of allGroups) {
+		try {
+			console.log(`[reorder] Moving gid=${group.id} to index=${leftIndex}`);
+			await chrome.tabGroups.move(group.id, { index: leftIndex });
+			const memberTabs = await chrome.tabs.query({
+				currentWindow: true,
+				groupId: group.id,
+			});
+			leftIndex += memberTabs.length;
+
+			// Check if move preserved metadata
+			const after = await chrome.tabGroups.get(group.id);
+			console.log(
+				`[reorder] After move gid=${group.id}: title="${after.title}" color="${after.color}"`,
+			);
+		} catch (e) {
+			console.log(`[reorder] FAILED to move group ${group.id}: ${e}`);
+		}
+	}
+
+	// 2. Brief pause so Chrome renders, then collapse
+	await delay(150);
+
+	for (const group of allGroups) {
+		try {
+			await chrome.tabGroups.update(group.id, { collapsed: true });
+			const after = await chrome.tabGroups.get(group.id);
+			console.log(
+				`[reorder] After collapse gid=${group.id}: title="${after.title}" color="${after.color}" collapsed=${after.collapsed}`,
+			);
+		} catch {}
+		await delay(50);
+	}
+}

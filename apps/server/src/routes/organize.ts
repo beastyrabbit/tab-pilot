@@ -2,7 +2,7 @@ import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { analyzeCorrections, organizeWithAI } from "../services/codex.js";
+import { analyzeCorrections, organizeWithAI, refineWithAI } from "../services/codex.js";
 import { storage } from "../services/storage.js";
 
 const OrganizeRequestSchema = z.object({
@@ -30,6 +30,14 @@ const OrganizeRequestSchema = z.object({
 	contentDepth: z.enum(["title-url", "meta", "full"]),
 });
 
+const RefineRequestSchema = z.object({
+	suggestions: z.array(z.any()),
+	tabs: z.array(z.any()),
+	feedback: z.string().min(1),
+	targetGroupName: z.string().optional(),
+	targetTabId: z.number().optional(),
+});
+
 const LearnRequestSchema = z.object({
 	originalSuggestions: z.array(z.any()),
 	appliedSuggestions: z.array(z.any()),
@@ -52,6 +60,35 @@ organizeRoute.post("/organize", zValidator("json", OrganizeRequestSchema), async
 		const stack = e instanceof Error ? e.stack : "";
 		console.error(`[organize] Error: ${message}`);
 		if (stack) console.error(stack);
+		return c.json({ error: message }, 500);
+	}
+});
+
+organizeRoute.post("/organize/refine", zValidator("json", RefineRequestSchema), async (c) => {
+	try {
+		const { suggestions, tabs, feedback, targetGroupName, targetTabId } = c.req.valid("json");
+		console.log(`[refine] Feedback: "${feedback}" (group=${targetGroupName}, tab=${targetTabId})`);
+
+		const result = await refineWithAI(suggestions, tabs, feedback, targetGroupName, targetTabId);
+
+		// Save any new memories
+		if (result.memories.length > 0) {
+			const existing = storage.getMemories();
+			const newMemories = result.memories.map((observation) => ({
+				id: nanoid(),
+				observation,
+				createdAt: new Date().toISOString(),
+				source: "correction" as const,
+			}));
+			storage.saveMemories([...existing, ...newMemories]);
+			console.log(`[refine] Saved ${newMemories.length} new memories`);
+		}
+
+		console.log(`[refine] Success: ${result.suggestions.length} suggestions`);
+		return c.json(result);
+	} catch (e) {
+		const message = e instanceof Error ? e.message : "Unknown error";
+		console.error(`[refine] Error: ${message}`);
 		return c.json({ error: message }, 500);
 	}
 });
