@@ -11,11 +11,10 @@ describe("Health endpoint", () => {
 		const res = await app.request("/api/health");
 		expect(res.status).toBe(200);
 		const body = await res.json();
-		expect(body).toMatchObject({
+		expect(body).toEqual({
 			status: "ok",
 			version: "0.1.0",
 			codex: false,
 		});
-		expect(body.bridgeToken).toBeTypeOf("string");
 	});
 });

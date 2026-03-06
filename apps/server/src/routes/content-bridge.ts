@@ -13,6 +13,21 @@ export function getBridgeToken(): string {
 
 export const contentBridgeRoute = new Hono();
 
+/**
+ * Token endpoint — only allows chrome-extension:// origins.
+ * Non-browser callers (like the MCP server on localhost) aren't subject to CORS.
+ */
+contentBridgeRoute.get("/content-bridge/token", (c) => {
+	const origin = c.req.header("origin") || "";
+	// Only allow chrome-extension:// origins (or no origin for server-to-server calls)
+	if (origin && !origin.startsWith("chrome-extension://")) {
+		return c.json({ error: "Forbidden" }, 403);
+	}
+	// Set restrictive CORS for this endpoint only
+	c.header("Access-Control-Allow-Origin", origin || "null");
+	return c.json({ token: BRIDGE_TOKEN });
+});
+
 contentBridgeRoute.get("/content-bridge/events", (c) => {
 	return streamSSE(c, async (stream) => {
 		let aborted = false;

@@ -1,16 +1,20 @@
 import { extractTabContent } from "./chromeContentApi.js";
-import { serverApi } from "./serverApi.js";
 
 const BASE_URL = "http://localhost:7777/api";
 
-// Bridge token obtained from server health endpoint
+// Bridge token obtained from dedicated token endpoint (restricted to chrome-extension:// origins)
 let bridgeToken: string | null = null;
+
+async function fetchBridgeToken(): Promise<string> {
+	const res = await fetch(`${BASE_URL}/content-bridge/token`);
+	const data = (await res.json()) as { token?: string };
+	bridgeToken = data.token || "";
+	return bridgeToken;
+}
 
 async function ensureBridgeToken(): Promise<string> {
 	if (bridgeToken) return bridgeToken;
-	const health = (await serverApi.health()) as { bridgeToken?: string };
-	bridgeToken = health.bridgeToken || "";
-	return bridgeToken;
+	return fetchBridgeToken();
 }
 
 /**
@@ -38,7 +42,7 @@ export function startContentBridge(): () => void {
 				const content = await extractTabContent(tabId, true);
 				const text = content?.pageText || content?.metaDescription || "";
 
-				await fetch(`${BASE_URL}/content-bridge/results`, {
+				const res = await fetch(`${BASE_URL}/content-bridge/results`, {
 					method: "POST",
 					headers: {
 						"Content-Type": "application/json",
@@ -46,6 +50,19 @@ export function startContentBridge(): () => void {
 					},
 					body: JSON.stringify({ requestId, tabId, content: text }),
 				});
+
+				// If token is stale (server restarted), re-fetch and retry once
+				if (res.status === 401) {
+					const newToken = await fetchBridgeToken();
+					await fetch(`${BASE_URL}/content-bridge/results`, {
+						method: "POST",
+						headers: {
+							"Content-Type": "application/json",
+							"X-Bridge-Token": newToken,
+						},
+						body: JSON.stringify({ requestId, tabId, content: text }),
+					});
+				}
 			});
 
 			await Promise.allSettled(extractions);

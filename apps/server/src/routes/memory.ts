@@ -1,6 +1,12 @@
+import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
+import { z } from "zod";
 import { aiEditMemories } from "../services/codex.js";
 import { storage } from "../services/storage.js";
+
+const AiEditSchema = z.object({
+	instruction: z.string().min(1).max(2000),
+});
 
 export const memoryRoute = new Hono();
 
@@ -8,12 +14,8 @@ memoryRoute.get("/memory", (c) => {
 	return c.json(storage.getMemories());
 });
 
-memoryRoute.post("/memory/ai-edit", async (c) => {
-	const body = await c.req.json();
-	const instruction = body.instruction;
-	if (typeof instruction !== "string" || !instruction.trim()) {
-		return c.json({ error: "instruction is required" }, 400);
-	}
+memoryRoute.post("/memory/ai-edit", zValidator("json", AiEditSchema), async (c) => {
+	const { instruction } = c.req.valid("json");
 
 	const result = await aiEditMemories(instruction.trim());
 

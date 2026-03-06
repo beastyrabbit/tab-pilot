@@ -10,6 +10,16 @@ import { createInterface } from "node:readline";
 
 const BRIDGE_URL = "http://localhost:7777/api";
 
+let cachedBridgeToken: string | null = null;
+
+async function getBridgeToken(): Promise<string> {
+	if (cachedBridgeToken) return cachedBridgeToken;
+	const res = await fetch(`${BRIDGE_URL}/content-bridge/token`);
+	const data = (await res.json()) as { token?: string };
+	cachedBridgeToken = data.token || "";
+	return cachedBridgeToken;
+}
+
 // ── MCP Protocol Helpers ────────────────────────────────────────────────
 
 function sendMessage(msg: Record<string, unknown>): void {
@@ -72,9 +82,13 @@ async function executeGetPageContent(args: {
 	// waits for the extension to extract and POST back, then returns.
 	// We do this by calling the bridge's internal content request mechanism via HTTP.
 	try {
+		const token = await getBridgeToken();
 		const res = await fetch(`${BRIDGE_URL}/content-bridge/request`, {
 			method: "POST",
-			headers: { "Content-Type": "application/json" },
+			headers: {
+				"Content-Type": "application/json",
+				"X-Bridge-Token": token,
+			},
 			body: JSON.stringify({ tabIds }),
 		});
 		if (!res.ok) {
