@@ -5,14 +5,16 @@ import { summarizeScreenshots } from "../services/codex.js";
 import { storage } from "../services/storage.js";
 
 const SummarizeRequestSchema = z.object({
-	screenshots: z.array(
-		z.object({
-			tabId: z.number(),
-			image: z.string(), // base64 JPEG
-			title: z.string(),
-			url: z.string(),
-		}),
-	),
+	screenshots: z
+		.array(
+			z.object({
+				tabId: z.number(),
+				image: z.string().max(5_000_000), // ~3.75 MB raw image
+				title: z.string(),
+				url: z.string(),
+			}),
+		)
+		.max(10),
 });
 
 const CacheCheckSchema = z.object({

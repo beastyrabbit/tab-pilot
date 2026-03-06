@@ -451,6 +451,11 @@ class CodexAppServer {
 		}));
 	}
 
+	/** Reset the thread so the next turn starts fresh (avoids context accumulation). */
+	resetThread(): void {
+		this.threadId = null;
+	}
+
 	async shutdown(): Promise<void> {
 		if (this.proc && !this.proc.killed) {
 			this.proc.kill();
@@ -464,6 +469,9 @@ class CodexAppServer {
 const codex = new CodexAppServer();
 
 export async function organizeWithAI(request: OrganizeRequest): Promise<OrganizeResponse> {
+	// Start fresh thread for each organize call to avoid context accumulation
+	codex.resetThread();
+
 	const rules = storage.getRules();
 	const memories = storage.getMemories();
 	const settings = storage.getSettings();

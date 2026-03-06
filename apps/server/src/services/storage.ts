@@ -109,13 +109,14 @@ export const storage = {
 		this.saveScreenshotCache(cache);
 	},
 
-	/** Get summaries for the given URLs from cache. */
+	/** Get summaries for the given URLs from cache (respects TTL). */
 	getSummariesForUrls(urls: string[]): Record<string, string> {
 		const cache = this.getScreenshotCache();
+		const now = Date.now();
 		const result: Record<string, string> = {};
 		for (const url of urls) {
 			const entry = cache[url];
-			if (entry?.summary) {
+			if (entry?.summary && now - entry.capturedAt < SCREENSHOT_CACHE_TTL) {
 				result[url] = entry.summary;
 			}
 		}

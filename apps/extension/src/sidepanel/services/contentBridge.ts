@@ -1,6 +1,17 @@
 import { extractTabContent } from "./chromeContentApi.js";
+import { serverApi } from "./serverApi.js";
 
 const BASE_URL = "http://localhost:7777/api";
+
+// Bridge token obtained from server health endpoint
+let bridgeToken: string | null = null;
+
+async function ensureBridgeToken(): Promise<string> {
+	if (bridgeToken) return bridgeToken;
+	const health = (await serverApi.health()) as { bridgeToken?: string };
+	bridgeToken = health.bridgeToken || "";
+	return bridgeToken;
+}
 
 /**
  * Opens an SSE connection to the server's content bridge.
@@ -20,6 +31,8 @@ export function startContentBridge(): () => void {
 			};
 			console.log(`[content-bridge] AI requested content for tabs: ${tabIds.join(", ")}`);
 
+			const token = await ensureBridgeToken();
+
 			// Extract content for each tab in parallel
 			const extractions = tabIds.map(async (tabId) => {
 				const content = await extractTabContent(tabId, true);
@@ -27,7 +40,10 @@ export function startContentBridge(): () => void {
 
 				await fetch(`${BASE_URL}/content-bridge/results`, {
 					method: "POST",
-					headers: { "Content-Type": "application/json" },
+					headers: {
+						"Content-Type": "application/json",
+						"X-Bridge-Token": token,
+					},
 					body: JSON.stringify({ requestId, tabId, content: text }),
 				});
 			});

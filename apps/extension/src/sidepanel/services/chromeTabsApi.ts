@@ -100,7 +100,10 @@ export async function collapseAndReorderGroups(): Promise<void> {
 		}
 	}
 
-	// 2. Brief pause so Chrome renders, then collapse
+	// 2. Pause before collapsing — experimentally derived from the Chromium
+	// rendering bug on Linux where group colors/titles can get lost if we
+	// collapse immediately after move. These delays give Chrome's internal
+	// state time to settle. Do not remove without testing on Linux/Chromium.
 	await delay(150);
 
 	for (const group of allGroups) {
@@ -111,6 +114,7 @@ export async function collapseAndReorderGroups(): Promise<void> {
 				`[reorder] After collapse gid=${group.id}: title="${after.title}" color="${after.color}" collapsed=${after.collapsed}`,
 			);
 		} catch {}
+		// Stagger collapse calls to avoid racing Chrome's internal reorder
 		await delay(50);
 	}
 }
