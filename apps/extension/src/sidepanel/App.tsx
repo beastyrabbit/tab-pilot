@@ -16,7 +16,7 @@ import { moveTabToGroup, ungroupTabs, updateGroup } from "./services/chromeTabsA
 type Panel = "settings" | "rules" | "memory" | null;
 
 export function App() {
-	const { status } = useServerHealth();
+	const { status, codexConnected } = useServerHealth();
 	const { tabs, groups, loading: tabsLoading, refresh } = useTabs();
 	const { settings, update: updateSettings } = useSettings();
 	const {
@@ -150,17 +150,11 @@ export function App() {
 				</div>
 			)}
 
-			{/* No API key banner */}
-			{status === "online" && settings && !settings.hasApiKey && (
-				<div className="bg-yellow-50 border border-yellow-200 rounded-lg p-2 mb-3 text-yellow-700 text-[10px]">
-					No API key configured.{" "}
-					<button
-						type="button"
-						onClick={() => setActivePanel("settings")}
-						className="underline font-medium"
-					>
-						Set it in settings
-					</button>
+			{/* Codex not connected banner */}
+			{status === "online" && !codexConnected && (
+				<div className="bg-amber-50 border border-amber-200 rounded-lg p-2 mb-3 text-amber-700 text-[10px]">
+					Codex backend not connected. Ensure <code className="font-mono">codex</code> CLI is
+					installed and available in PATH.
 				</div>
 			)}
 
@@ -176,7 +170,7 @@ export function App() {
 				<OrganizeButton
 					onClick={handleOrganize}
 					loading={organizing}
-					disabled={status !== "online" || !settings?.hasApiKey || tabs.length === 0}
+					disabled={status !== "online" || !codexConnected || tabs.length === 0}
 				/>
 			</div>
 

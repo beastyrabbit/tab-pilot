@@ -48,7 +48,7 @@ export const serverApi = {
 	},
 
 	updateSettings(
-		settings: Partial<{ apiKey: string; model: string; contentDepth: string }>,
+		settings: Partial<{ model: string; contentDepth: string }>,
 	): Promise<PublicSettings> {
 		return request("/settings", {
 			method: "PUT",

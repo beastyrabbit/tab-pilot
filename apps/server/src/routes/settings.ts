@@ -9,7 +9,6 @@ settingsRoute.get("/settings", (c) => {
 	const publicSettings: PublicSettings = {
 		model: settings.model,
 		contentDepth: settings.contentDepth,
-		hasApiKey: !!settings.openaiApiKey,
 	};
 	return c.json(publicSettings);
 });
@@ -18,7 +17,6 @@ settingsRoute.put("/settings", async (c) => {
 	const body = await c.req.json();
 	const update: Record<string, unknown> = {};
 
-	if (body.apiKey !== undefined) update.openaiApiKey = body.apiKey;
 	if (body.model !== undefined) update.model = body.model;
 	if (body.contentDepth !== undefined) update.contentDepth = body.contentDepth;
 
@@ -26,7 +24,6 @@ settingsRoute.put("/settings", async (c) => {
 	const publicSettings: PublicSettings = {
 		model: settings.model,
 		contentDepth: settings.contentDepth,
-		hasApiKey: !!settings.openaiApiKey,
 	};
 	return c.json(publicSettings);
 });

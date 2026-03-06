@@ -4,34 +4,27 @@ import { serverApi } from "../services/serverApi.js";
 
 interface SettingsPanelProps {
 	settings: PublicSettings | null;
-	onUpdate: (
-		partial: Partial<{ apiKey: string; model: string; contentDepth: string }>,
-	) => Promise<PublicSettings>;
+	onUpdate: (partial: Partial<{ model: string; contentDepth: string }>) => Promise<PublicSettings>;
 	onClose: () => void;
 }
 
 export function SettingsPanel({ settings, onUpdate, onClose }: SettingsPanelProps) {
-	const [apiKey, setApiKey] = useState("");
-	const [model, setModel] = useState(settings?.model || "gpt-4o");
+	const [model, setModel] = useState(settings?.model || "o3");
 	const [contentDepth, setContentDepth] = useState<ContentDepth>(settings?.contentDepth || "meta");
 	const [models, setModels] = useState<ModelInfo[]>([]);
 	const [saving, setSaving] = useState(false);
 
 	useEffect(() => {
-		if (settings?.hasApiKey) {
-			serverApi
-				.getModels()
-				.then((res) => setModels(res.models))
-				.catch(() => {});
-		}
-	}, [settings?.hasApiKey]);
+		serverApi
+			.getModels()
+			.then((res) => setModels(res.models))
+			.catch(() => {});
+	}, []);
 
 	const handleSave = async () => {
 		setSaving(true);
 		try {
-			const update: Record<string, string> = { model, contentDepth };
-			if (apiKey) update.apiKey = apiKey;
-			await onUpdate(update);
+			await onUpdate({ model, contentDepth });
 			onClose();
 		} finally {
 			setSaving(false);
@@ -44,19 +37,6 @@ export function SettingsPanel({ settings, onUpdate, onClose }: SettingsPanelProp
 				<h2 className="text-sm font-bold text-gray-900 mb-3">Settings</h2>
 
 				<div className="space-y-3">
-					<div>
-						<label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
-							OpenAI API Key
-						</label>
-						<input
-							type="password"
-							value={apiKey}
-							onChange={(e) => setApiKey(e.target.value)}
-							placeholder={settings?.hasApiKey ? "Key configured (enter to change)" : "sk-..."}
-							className="mt-1 w-full px-2 py-1.5 text-xs border rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-						/>
-					</div>
-
 					<div>
 						<label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
 							Model

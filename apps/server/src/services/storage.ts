@@ -27,8 +27,7 @@ function writeJson<T>(filename: string, data: T): void {
 }
 
 const DEFAULT_SETTINGS: ServerSettings = {
-	openaiApiKey: "",
-	model: "gpt-4o",
+	model: "o3",
 	contentDepth: "meta",
 	port: 7777,
 };

@@ -2,7 +2,7 @@ import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { analyzeCorrections, organizeWithAI } from "../services/openai.js";
+import { analyzeCorrections, organizeWithAI } from "../services/codex.js";
 import { storage } from "../services/storage.js";
 
 const OrganizeRequestSchema = z.object({

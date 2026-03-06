@@ -31,6 +31,7 @@ export interface LearnRequest {
 export interface HealthResponse {
 	status: "ok";
 	version: string;
+	codex: boolean;
 }
 
 export interface ErrorResponse {

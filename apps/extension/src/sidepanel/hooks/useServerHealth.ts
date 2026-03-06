@@ -5,13 +5,16 @@ export type ServerStatus = "checking" | "online" | "offline";
 
 export function useServerHealth() {
 	const [status, setStatus] = useState<ServerStatus>("checking");
+	const [codexConnected, setCodexConnected] = useState(false);
 
 	const check = useCallback(async () => {
 		try {
-			await serverApi.health();
+			const health = await serverApi.health();
 			setStatus("online");
+			setCodexConnected(health.codex);
 		} catch {
 			setStatus("offline");
+			setCodexConnected(false);
 		}
 	}, []);
 
@@ -21,5 +24,5 @@ export function useServerHealth() {
 		return () => clearInterval(interval);
 	}, [check]);
 
-	return { status, check };
+	return { status, codexConnected, check };
 }
