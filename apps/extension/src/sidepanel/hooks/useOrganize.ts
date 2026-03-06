@@ -55,13 +55,17 @@ export function useOrganize() {
 						scanRunningRef.current = false;
 						return;
 					}
-					runScreenshotScan(tabs, (progress) => {
-						setScanProgress(progress);
-						if (progress.phase === "done") {
-							scanRunningRef.current = false;
-							setTimeout(() => setScanProgress(null), 2000);
-						}
-					}).catch(() => {
+					runScreenshotScan(
+						tabs,
+						(progress) => {
+							setScanProgress(progress);
+							if (progress.phase === "done") {
+								scanRunningRef.current = false;
+								setTimeout(() => setScanProgress(null), 2000);
+							}
+						},
+						needed,
+					).catch(() => {
 						scanRunningRef.current = false;
 						setScanProgress(null);
 					});
@@ -165,6 +169,17 @@ export function useOrganize() {
 				// 2. Collapse ALL groups and move them to the left
 				await collapseAndReorderGroups();
 
+				// 3. Fire-and-forget learning from corrections
+				if (suggestions) {
+					serverApi
+						.learn({
+							originalSuggestions: suggestions,
+							appliedSuggestions: toApply,
+							tabs: tabsRef.current,
+						})
+						.catch(() => {});
+				}
+
 				setSuggestions(null);
 				setReasoning("");
 				closeBridge();
@@ -172,7 +187,7 @@ export function useOrganize() {
 				setError(e instanceof Error ? e.message : "Failed to apply groups");
 			}
 		},
-		[closeBridge],
+		[suggestions, closeBridge],
 	);
 
 	const dismiss = useCallback(() => {

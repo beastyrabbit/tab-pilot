@@ -9,7 +9,8 @@
     "activeTab",
     "sidePanel",
     "scripting",
-    "debugger"
+    "debugger",
+    "favicon"
   ],
   "host_permissions": [
     "http://*/*",

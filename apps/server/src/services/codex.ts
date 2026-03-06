@@ -11,14 +11,17 @@ import { buildGroupingPrompt, buildSystemPrompt } from "../prompts/grouping.js";
 import { contentBridge } from "./content-bridge.js";
 import { storage } from "./storage.js";
 
+const DEBUG = !!process.env.TAB_ORGA_DEBUG;
 const LOG_FILE = "/tmp/tab-orga-codex.log";
 
 function log(msg: string): void {
-	const line = `${new Date().toISOString()} ${msg}`;
 	console.log(msg);
-	try {
-		appendFileSync(LOG_FILE, `${line}\n`);
-	} catch {}
+	if (DEBUG) {
+		const line = `${new Date().toISOString()} ${msg}`;
+		try {
+			appendFileSync(LOG_FILE, `${line}\n`);
+		} catch {}
+	}
 }
 
 const VALID_COLORS = new Set([
@@ -105,6 +108,7 @@ class CodexAppServer {
 	private initialized = false;
 	private turnOutput: string | null = null;
 	private turnResolve: ((v: string) => void) | null = null;
+	private turnReject: ((e: Error) => void) | null = null;
 	// Queue to serialize turns — Codex only handles one turn at a time per thread
 	private turnQueue: Array<() => void> = [];
 	private turnRunning = false;
@@ -241,9 +245,11 @@ class CodexAppServer {
 				const err = turn.error as Record<string, unknown>;
 				const errMsg = (err.message as string) || "Turn failed";
 				log(`[codex] Turn failed: ${errMsg}`);
-				if (this.turnResolve) {
-					this.turnResolve("");
+				if (this.turnReject) {
+					this.turnReject(new Error(errMsg));
 					this.turnResolve = null;
+					this.turnReject = null;
+					this.turnOutput = null;
 				}
 				return;
 			}
@@ -414,8 +420,9 @@ class CodexAppServer {
 		);
 		const startTime = Date.now();
 
-		const outputPromise = new Promise<string>((resolve) => {
+		const outputPromise = new Promise<string>((resolve, reject) => {
 			this.turnResolve = resolve;
+			this.turnReject = reject;
 		});
 
 		await this.send("turn/start", {
@@ -469,10 +476,11 @@ export async function organizeWithAI(request: OrganizeRequest): Promise<Organize
 		: "";
 	const fullPrompt = `${systemPrompt}${toolHint}\n\n${userPrompt}`;
 
-	// Save prompt for debugging
-	const { writeFileSync } = await import("node:fs");
-	writeFileSync("/tmp/tab-orga-last-prompt.txt", fullPrompt);
-	log("[organize] Prompt saved to /tmp/tab-orga-last-prompt.txt");
+	if (DEBUG) {
+		const { writeFileSync } = await import("node:fs");
+		writeFileSync("/tmp/tab-orga-last-prompt.txt", fullPrompt);
+		log("[organize] Debug prompt saved to /tmp/tab-orga-last-prompt.txt");
+	}
 
 	const output = await codex.runTurn(fullPrompt, GROUPING_SCHEMA);
 

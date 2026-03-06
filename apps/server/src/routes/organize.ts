@@ -30,18 +30,38 @@ const OrganizeRequestSchema = z.object({
 	contentDepth: z.enum(["title-url", "meta", "full"]),
 });
 
+const GroupingSuggestionSchema = z.object({
+	groupName: z.string(),
+	color: z.enum(["grey", "blue", "red", "yellow", "green", "pink", "purple", "cyan", "orange"]),
+	tabIds: z.array(z.number()),
+	existingGroupId: z.preprocess((v) => (v === null ? undefined : v), z.number().optional()),
+	isNew: z.boolean(),
+	confidence: z.number(),
+});
+
+const TabInfoSchema = z.object({
+	id: z.number(),
+	windowId: z.number(),
+	url: z.string(),
+	title: z.string(),
+	favIconUrl: z.string().optional(),
+	groupId: z.number(),
+	metaDescription: z.string().optional(),
+	pageText: z.string().optional(),
+});
+
 const RefineRequestSchema = z.object({
-	suggestions: z.array(z.any()),
-	tabs: z.array(z.any()),
+	suggestions: z.array(GroupingSuggestionSchema),
+	tabs: z.array(TabInfoSchema),
 	feedback: z.string().min(1),
 	targetGroupName: z.string().optional(),
 	targetTabId: z.number().optional(),
 });
 
 const LearnRequestSchema = z.object({
-	originalSuggestions: z.array(z.any()),
-	appliedSuggestions: z.array(z.any()),
-	tabs: z.array(z.any()),
+	originalSuggestions: z.array(GroupingSuggestionSchema),
+	appliedSuggestions: z.array(GroupingSuggestionSchema),
+	tabs: z.array(TabInfoSchema),
 });
 
 export const organizeRoute = new Hono();

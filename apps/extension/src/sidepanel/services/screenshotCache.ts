@@ -51,8 +51,9 @@ export interface ScanProgress {
 export async function runScreenshotScan(
 	tabs: TabInfo[],
 	onProgress?: (progress: ScanProgress) => void,
+	preFiltered?: TabInfo[],
 ): Promise<void> {
-	const needCapture = await getTabsNeedingScreenshots(tabs);
+	const needCapture = preFiltered ?? (await getTabsNeedingScreenshots(tabs));
 
 	if (needCapture.length === 0) {
 		onProgress?.({ phase: "done", done: 0, total: 0 });

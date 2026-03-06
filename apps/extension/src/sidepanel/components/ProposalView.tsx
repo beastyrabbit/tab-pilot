@@ -43,29 +43,28 @@ function Favicon({
 	className,
 }: { url?: string; pageUrl?: string; className?: string }) {
 	const [failed, setFailed] = useState(false);
-	const [googleFailed, setGoogleFailed] = useState(false);
+	const [chromeFailed, setChromeFailed] = useState(false);
 
-	const googleFaviconUrl = (() => {
+	const chromeFaviconUrl = (() => {
 		if (!pageUrl) return null;
 		try {
-			const domain = new URL(pageUrl).hostname;
-			return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+			return `chrome-extension://${chrome.runtime.id}/_favicon/?pageUrl=${encodeURIComponent(pageUrl)}&size=32`;
 		} catch {
 			return null;
 		}
 	})();
 
-	if ((!url || failed) && (!googleFaviconUrl || googleFailed)) {
+	if ((!url || failed) && (!chromeFaviconUrl || chromeFailed)) {
 		return <div className={`${className} bg-gray-300 dark:bg-gray-600 rounded`} />;
 	}
 
 	if (!url || failed) {
 		return (
 			<img
-				src={googleFaviconUrl!}
+				src={chromeFaviconUrl!}
 				alt=""
 				className={className}
-				onError={() => setGoogleFailed(true)}
+				onError={() => setChromeFailed(true)}
 			/>
 		);
 	}

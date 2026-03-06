@@ -91,10 +91,16 @@ export const storage = {
 		});
 	},
 
-	/** Store summaries for the given URLs. */
+	/** Store summaries for the given URLs, evicting stale entries. */
 	cacheSummaries(summaries: Array<{ url: string; summary: string }>): void {
 		const cache = this.getScreenshotCache();
 		const now = Date.now();
+		// Evict stale entries
+		for (const url of Object.keys(cache)) {
+			if (now - cache[url].capturedAt >= SCREENSHOT_CACHE_TTL) {
+				delete cache[url];
+			}
+		}
 		for (const s of summaries) {
 			if (s.summary) {
 				cache[s.url] = { summary: s.summary, capturedAt: now, url: s.url };
