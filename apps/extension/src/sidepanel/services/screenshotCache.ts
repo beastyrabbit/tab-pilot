@@ -86,11 +86,16 @@ export async function runScreenshotScan(
 		return { tabId, image, title: tab.title, url: tab.url };
 	});
 
-	try {
-		await serverApi.summarize(payload);
-		console.log(`[screenshot] Summarized and cached ${payload.length} tabs on server`);
-	} catch (e) {
-		console.warn("[screenshot] Summarization failed:", e);
+	// Chunk to match server's .max(10) limit on the screenshots array
+	const BATCH_SIZE = 10;
+	for (let i = 0; i < payload.length; i += BATCH_SIZE) {
+		const batch = payload.slice(i, i + BATCH_SIZE);
+		try {
+			await serverApi.summarize(batch);
+			console.log(`[screenshot] Summarized and cached ${batch.length} tabs on server`);
+		} catch (e) {
+			console.warn("[screenshot] Summarization batch failed:", e);
+		}
 	}
 
 	onProgress?.({ phase: "done", done: screenshots.size, total: screenshots.size });

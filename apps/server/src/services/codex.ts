@@ -15,8 +15,8 @@ const DEBUG = !!process.env.TAB_ORGA_DEBUG;
 const LOG_FILE = "/tmp/tab-orga-codex.log";
 
 function log(msg: string): void {
-	console.log(msg);
 	if (DEBUG) {
+		console.log(msg);
 		const line = `${new Date().toISOString()} ${msg}`;
 		try {
 			appendFileSync(LOG_FILE, `${line}\n`);

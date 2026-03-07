@@ -29,6 +29,10 @@ contentBridgeRoute.get("/content-bridge/token", (c) => {
 });
 
 contentBridgeRoute.get("/content-bridge/events", (c) => {
+	const origin = c.req.header("origin") || "";
+	if (origin && !origin.startsWith("chrome-extension://")) {
+		return c.json({ error: "Forbidden" }, 403);
+	}
 	return streamSSE(c, async (stream) => {
 		let aborted = false;
 		stream.onAbort(() => {
