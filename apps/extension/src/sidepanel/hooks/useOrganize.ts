@@ -1,5 +1,5 @@
 import type { ContentDepth, GroupingSuggestion, TabGroupInfo, TabInfo } from "@tab-orga/shared";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { enrichTabsWithContent } from "../services/chromeContentApi.js";
 import { collapseAndReorderGroups, groupTabs, updateGroup } from "../services/chromeTabsApi.js";
 import { startContentBridge } from "../services/contentBridge.js";
@@ -33,6 +33,16 @@ export function useOrganize() {
 			bridgeCleanupRef.current();
 			bridgeCleanupRef.current = null;
 		}
+	}, []);
+
+	// Close bridge on unmount (e.g. side panel closed mid-organize)
+	useEffect(() => {
+		return () => {
+			if (bridgeCleanupRef.current) {
+				bridgeCleanupRef.current();
+				bridgeCleanupRef.current = null;
+			}
+		};
 	}, []);
 
 	const organize = useCallback(

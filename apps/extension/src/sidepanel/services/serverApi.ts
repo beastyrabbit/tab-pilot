@@ -121,23 +121,11 @@ export const serverApi = {
 	async summarize(
 		screenshots: Array<{ tabId: number; image: string; title: string; url: string }>,
 	): Promise<{ summaries: Array<{ tabId: number; summary: string }> }> {
-		// Send in batches of 4 to avoid huge payloads
-		const batchSize = 4;
-		const allSummaries: Array<{ tabId: number; summary: string }> = [];
-
-		for (let i = 0; i < screenshots.length; i += batchSize) {
-			const batch = screenshots.slice(i, i + batchSize);
-			const result = await request<{ summaries: Array<{ tabId: number; summary: string }> }>(
-				"/summarize",
-				{
-					method: "POST",
-					body: JSON.stringify({ screenshots: batch }),
-				},
-			);
-			allSummaries.push(...result.summaries);
-		}
-
-		return { summaries: allSummaries };
+		// Caller (screenshotCache.ts) batches into chunks of 10 to match server's .max(10) limit
+		return request<{ summaries: Array<{ tabId: number; summary: string }> }>("/summarize", {
+			method: "POST",
+			body: JSON.stringify({ screenshots }),
+		});
 	},
 
 	/** Ask server which URLs already have cached summaries. */

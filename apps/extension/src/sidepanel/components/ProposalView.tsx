@@ -110,7 +110,7 @@ export function ProposalView({
 	onApply,
 	onDismiss,
 }: ProposalViewProps) {
-	const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
+	const [expandedGroup, setExpandedGroup] = useState<number | string | null>(null);
 	const [selectedTab, setSelectedTab] = useState<number | null>(null);
 
 	const findTab = (id: number) => tabs.find((t) => t.id === id);
@@ -157,18 +157,19 @@ export function ProposalView({
 
 			{/* Groups */}
 			{suggestions.map((suggestion, idx) => {
-				const isExpanded = expandedGroup === suggestion.groupName;
+				const stableKey = suggestion.tabIds[0] ?? idx;
+				const isExpanded = expandedGroup === stableKey;
 
 				return (
 					<div
-						key={suggestion.tabIds[0] ?? idx}
+						key={stableKey}
 						className="border-l-2 rounded-r-lg"
 						style={{ ...chromeBorderStyle(suggestion.color), ...chromeBgStyle(suggestion.color) }}
 					>
 						{/* Group header */}
 						<button
 							type="button"
-							onClick={() => setExpandedGroup(isExpanded ? null : suggestion.groupName)}
+							onClick={() => setExpandedGroup(isExpanded ? null : stableKey)}
 							className="w-full flex items-center justify-between px-3 py-2 text-left"
 						>
 							<span className="text-sm font-semibold text-gray-800 dark:text-gray-200">
