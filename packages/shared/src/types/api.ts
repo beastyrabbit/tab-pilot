@@ -31,11 +31,35 @@ export interface LearnRequest {
 export interface HealthResponse {
 	status: "ok";
 	version: string;
+	codex: boolean;
 }
 
 export interface ErrorResponse {
 	error: string;
 	details?: string;
+}
+
+export interface RefineRequest {
+	suggestions: GroupingSuggestion[];
+	tabs: TabInfo[];
+	feedback: string;
+	targetGroupName?: string;
+	targetTabId?: number;
+}
+
+export interface RefineResponse {
+	suggestions: GroupingSuggestion[];
+	reasoning: string;
+	memories: string[];
+}
+
+export interface AIEditMemoriesRequest {
+	instruction: string;
+}
+
+export interface AIEditMemoriesResponse {
+	memories: Array<{ id: string; observation: string }>;
+	summary: string;
 }
 
 export interface ModelsResponse {

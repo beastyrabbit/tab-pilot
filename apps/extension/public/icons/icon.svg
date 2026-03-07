@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366f1"/>
+      <stop offset="100%" style="stop-color:#8b5cf6"/>
+    </linearGradient>
+    <linearGradient id="tab1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#38bdf8"/>
+      <stop offset="100%" style="stop-color:#818cf8"/>
+    </linearGradient>
+    <linearGradient id="tab2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#34d399"/>
+      <stop offset="100%" style="stop-color:#22d3ee"/>
+    </linearGradient>
+    <linearGradient id="tab3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#fb923c"/>
+      <stop offset="100%" style="stop-color:#f472b6"/>
+    </linearGradient>
+  </defs>
+  <!-- Background rounded square -->
+  <rect x="4" y="4" width="120" height="120" rx="24" fill="url(#bg)"/>
+  <!-- Three stacked tab shapes -->
+  <!-- Back tab (orange-pink) -->
+  <rect x="24" y="30" width="80" height="18" rx="6" fill="url(#tab3)" opacity="0.85"/>
+  <!-- Middle tab (green-cyan) -->
+  <rect x="24" y="52" width="80" height="18" rx="6" fill="url(#tab2)" opacity="0.9"/>
+  <!-- Front tab (blue-indigo) -->
+  <rect x="24" y="74" width="80" height="18" rx="6" fill="url(#tab1)"/>
+  <!-- Small dots on tabs to suggest favicons -->
+  <circle cx="36" cy="39" r="4" fill="rgba(255,255,255,0.7)"/>
+  <circle cx="36" cy="61" r="4" fill="rgba(255,255,255,0.7)"/>
+  <circle cx="36" cy="83" r="4" fill="rgba(255,255,255,0.7)"/>
+  <!-- Tab titles (white lines) -->
+  <rect x="46" y="37" width="38" height="4" rx="2" fill="rgba(255,255,255,0.6)"/>
+  <rect x="46" y="59" width="44" height="4" rx="2" fill="rgba(255,255,255,0.6)"/>
+  <rect x="46" y="81" width="32" height="4" rx="2" fill="rgba(255,255,255,0.6)"/>
+  <!-- AI sparkle in top-right -->
+  <g transform="translate(96,24)">
+    <path d="M0,-10 L2.5,-2.5 L10,0 L2.5,2.5 L0,10 L-2.5,2.5 L-10,0 L-2.5,-2.5 Z" fill="#fbbf24"/>
+    <path d="M8,-6 L9,-3.5 L12,-3 L9,-2.5 L8,0 L7,-2.5 L4,-3 L7,-3.5 Z" fill="#fbbf24" opacity="0.7"/>
+  </g>
+</svg>

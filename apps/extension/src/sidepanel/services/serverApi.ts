@@ -1,4 +1,5 @@
 import type {
+	AIEditMemoriesResponse,
 	AIMemory,
 	ErrorResponse,
 	HealthResponse,
@@ -7,6 +8,8 @@ import type {
 	OrganizeRequest,
 	OrganizeResponse,
 	PublicSettings,
+	RefineRequest,
+	RefineResponse,
 	UserRule,
 } from "@tab-orga/shared";
 
@@ -36,6 +39,13 @@ export const serverApi = {
 		});
 	},
 
+	refine(body: RefineRequest): Promise<RefineResponse> {
+		return request("/organize/refine", {
+			method: "POST",
+			body: JSON.stringify(body),
+		});
+	},
+
 	learn(body: LearnRequest): Promise<void> {
 		return request("/organize/learn", {
 			method: "POST",
@@ -48,7 +58,7 @@ export const serverApi = {
 	},
 
 	updateSettings(
-		settings: Partial<{ apiKey: string; model: string; contentDepth: string }>,
+		settings: Partial<{ model: string; contentDepth: string; generalPrompt: string }>,
 	): Promise<PublicSettings> {
 		return request("/settings", {
 			method: "PUT",
@@ -86,11 +96,53 @@ export const serverApi = {
 		return request("/memory");
 	},
 
+	updateMemory(id: string, observation: string): Promise<AIMemory> {
+		return request(`/memory/${id}`, {
+			method: "PUT",
+			body: JSON.stringify({ observation }),
+		});
+	},
+
 	deleteMemory(id: string): Promise<void> {
 		return request(`/memory/${id}`, { method: "DELETE" });
 	},
 
 	clearMemories(): Promise<void> {
 		return request("/memory", { method: "DELETE" });
+	},
+
+	aiEditMemories(instruction: string): Promise<AIEditMemoriesResponse> {
+		return request("/memory/ai-edit", {
+			method: "POST",
+			body: JSON.stringify({ instruction }),
+		});
+	},
+
+	async summarize(
+		screenshots: Array<{ tabId: number; image: string; title: string; url: string }>,
+	): Promise<{ summaries: Array<{ tabId: number; summary: string }> }> {
+		// Caller (screenshotCache.ts) batches into chunks of 10 to match server's .max(10) limit
+		return request<{ summaries: Array<{ tabId: number; summary: string }> }>("/summarize", {
+			method: "POST",
+			body: JSON.stringify({ screenshots }),
+		});
+	},
+
+	/** Ask server which URLs already have cached summaries. */
+	async checkCachedUrls(urls: string[]): Promise<Set<string>> {
+		const result = await request<{ cached: string[] }>("/summarize/check", {
+			method: "POST",
+			body: JSON.stringify({ urls }),
+		});
+		return new Set(result.cached);
+	},
+
+	/** Get cached summaries by URL from server. */
+	async lookupSummaries(urls: string[]): Promise<Record<string, string>> {
+		const result = await request<{ summaries: Record<string, string> }>("/summarize/lookup", {
+			method: "POST",
+			body: JSON.stringify({ urls }),
+		});
+		return result.summaries;
 	},
 };

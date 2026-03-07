@@ -2,6 +2,8 @@ import type { TabGroupInfo, TabInfo } from "@tab-orga/shared";
 import { useCallback, useEffect, useState } from "react";
 import { getAllGroups, getAllTabs } from "../services/chromeTabsApi.js";
 
+const isChromeExtension = typeof chrome !== "undefined" && !!chrome.tabs;
+
 export function useTabs() {
 	const [tabs, setTabs] = useState<TabInfo[]>([]);
 	const [groups, setGroups] = useState<TabGroupInfo[]>([]);
@@ -21,6 +23,8 @@ export function useTabs() {
 
 	useEffect(() => {
 		refresh();
+
+		if (!isChromeExtension) return;
 
 		const onUpdated = () => refresh();
 		const onRemoved = () => refresh();

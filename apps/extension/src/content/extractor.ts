@@ -22,7 +22,7 @@ function extractContent(includeFullText: boolean): ExtractedContent {
 
 	if (includeFullText) {
 		const body = document.body?.innerText || "";
-		result.pageText = body.slice(0, 2000);
+		result.pageText = body.slice(0, 100_000);
 	}
 
 	return result;

@@ -26,7 +26,7 @@ export async function extractTabContent(
 					metaDescription: getMeta("description"),
 					ogDescription: getMeta("og:description"),
 					keywords: getMeta("keywords"),
-					pageText: fullText ? (document.body?.innerText || "").slice(0, 2000) : null,
+					pageText: fullText ? (document.body?.innerText || "").slice(0, 100_000) : null,
 				};
 			},
 			args: [includeFullText],

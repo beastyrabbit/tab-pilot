@@ -22,7 +22,7 @@ describe("Prompt builders", () => {
 		expect(prompt).toContain("Learned user preferences");
 	});
 
-	it("buildGroupingPrompt formats tabs correctly", () => {
+	it("buildGroupingPrompt formats tabs in TOON tabular format", () => {
 		const request: OrganizeRequest = {
 			tabs: [
 				{
@@ -37,9 +37,9 @@ describe("Prompt builders", () => {
 			contentDepth: "title-url",
 		};
 		const prompt = buildGroupingPrompt(request, []);
-		expect(prompt).toContain("[ID: 1]");
+		expect(prompt).toContain("tabs[1");
 		expect(prompt).toContain("GitHub");
-		expect(prompt).toContain("https://github.com");
+		expect(prompt).toContain("github.com");
 	});
 
 	it("buildGroupingPrompt includes existing groups", () => {
@@ -57,8 +57,9 @@ describe("Prompt builders", () => {
 			contentDepth: "title-url",
 		};
 		const prompt = buildGroupingPrompt(request, []);
-		expect(prompt).toContain("Existing Groups");
+		expect(prompt).toContain("existingGroups");
 		expect(prompt).toContain("Dev");
+		expect(prompt).toContain("blue");
 	});
 
 	it("buildGroupingPrompt includes user rules", () => {
@@ -78,7 +79,7 @@ describe("Prompt builders", () => {
 			},
 		];
 		const prompt = buildGroupingPrompt(request, rules);
-		expect(prompt).toContain("User Rules");
+		expect(prompt).toContain("Rules");
 		expect(prompt).toContain("github.com");
 		expect(prompt).toContain("Development");
 	});

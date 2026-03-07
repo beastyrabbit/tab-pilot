@@ -14,8 +14,14 @@ apps/server/data/
 # IDE
 .vscode/
 .idea/
+
+# Codex local config
+.codex/
 *.swp
 *.swo
+
+# Playwright MCP
+.playwright-mcp/
 
 # OS
 .DS_Store
