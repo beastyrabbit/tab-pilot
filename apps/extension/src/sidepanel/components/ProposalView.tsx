@@ -156,12 +156,12 @@ export function ProposalView({
 			</div>
 
 			{/* Groups */}
-			{suggestions.map((suggestion) => {
+			{suggestions.map((suggestion, idx) => {
 				const isExpanded = expandedGroup === suggestion.groupName;
 
 				return (
 					<div
-						key={suggestion.groupName}
+						key={suggestion.tabIds[0] ?? idx}
 						className="border-l-2 rounded-r-lg"
 						style={{ ...chromeBorderStyle(suggestion.color), ...chromeBgStyle(suggestion.color) }}
 					>

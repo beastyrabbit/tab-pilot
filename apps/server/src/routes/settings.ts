@@ -1,6 +1,14 @@
+import { zValidator } from "@hono/zod-validator";
 import type { PublicSettings } from "@tab-orga/shared";
 import { Hono } from "hono";
+import { z } from "zod";
 import { storage } from "../services/storage.js";
+
+const UpdateSettingsSchema = z.object({
+	model: z.string().optional(),
+	contentDepth: z.enum(["title-url", "meta", "full"]).optional(),
+	generalPrompt: z.string().max(2000).optional(),
+});
 
 export const settingsRoute = new Hono();
 
@@ -16,8 +24,8 @@ settingsRoute.get("/settings", (c) => {
 	return c.json(toPublic(storage.getSettings()));
 });
 
-settingsRoute.put("/settings", async (c) => {
-	const body = await c.req.json();
+settingsRoute.put("/settings", zValidator("json", UpdateSettingsSchema), (c) => {
+	const body = c.req.valid("json");
 	const update: Record<string, unknown> = {};
 
 	if (body.model !== undefined) update.model = body.model;
