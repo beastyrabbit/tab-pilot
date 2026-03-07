@@ -36,14 +36,16 @@ export function buildGroupingPrompt(request: OrganizeRequest, rules: UserRule[])
 	const hasContent = tabs.some((t) => t.pageText);
 
 	// Build tab data as plain objects, then encode to TOON
+	// Strip tabs and newlines to keep TOON columns aligned
+	const sanitize = (s: string) => s.replace(/[\t\n\r]/g, " ");
 	const tabData = tabs.map((t) => {
 		const row: Record<string, unknown> = {
 			id: t.id,
-			title: t.title,
-			url: t.url,
+			title: sanitize(t.title),
+			url: t.url.replace(/[\t\n\r]/g, ""),
 		};
-		if (hasMeta) row.meta = t.metaDescription || "";
-		if (hasContent) row.content = (t.pageText || "").slice(0, 200);
+		if (hasMeta) row.meta = sanitize(t.metaDescription || "");
+		if (hasContent) row.content = sanitize((t.pageText || "").slice(0, 200));
 		return row;
 	});
 

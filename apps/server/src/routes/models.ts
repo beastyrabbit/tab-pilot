@@ -9,7 +9,8 @@ modelsRoute.get("/models", async (c) => {
 		const models = await getAvailableModels();
 		const settings = storage.getSettings();
 		return c.json({ models, current: settings.model });
-	} catch {
+	} catch (e) {
+		console.error("[models] Failed to list models:", e instanceof Error ? e.message : e);
 		const settings = storage.getSettings();
 		return c.json({ models: [], current: settings.model });
 	}
