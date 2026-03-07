@@ -5,7 +5,7 @@ import { z } from "zod";
 import { storage } from "../services/storage.js";
 
 const UpdateSettingsSchema = z.object({
-	model: z.string().optional(),
+	model: z.string().max(200).optional(),
 	contentDepth: z.enum(["title-url", "meta", "full"]).optional(),
 	generalPrompt: z.string().max(2000).optional(),
 });
