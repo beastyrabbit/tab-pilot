@@ -73,7 +73,7 @@ const ContentRequestSchema = z.object({
 const ContentResultSchema = z.object({
 	requestId: z.string().min(1),
 	tabId: z.number(),
-	content: z.string().default(""),
+	content: z.string().max(10_000).default(""),
 });
 
 function requireBridgeToken(c: { req: { header: (name: string) => string | undefined } }) {

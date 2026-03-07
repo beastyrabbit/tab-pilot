@@ -523,6 +523,7 @@ export async function analyzeCorrections(
 	appliedSuggestions: GroupingSuggestion[],
 	tabs: TabInfo[],
 ): Promise<string[]> {
+	codex.resetThread(); // corrections analysis is independent of prior context
 	const prompt = `You are analyzing how a user modified AI-suggested tab groupings.
 
 Original suggestions:
@@ -697,6 +698,7 @@ export async function summarizeScreenshots(
 	const allSummaries: Array<{ tabId: number; summary: string }> = [];
 
 	for (let i = 0; i < screenshots.length; i += batchSize) {
+		codex.resetThread(); // each batch is independent — no cross-batch context needed
 		const batch = screenshots.slice(i, i + batchSize);
 
 		const tabList = batch.map((s) => `- Tab ${s.tabId}: "${s.title}" (${s.url})`).join("\n");
