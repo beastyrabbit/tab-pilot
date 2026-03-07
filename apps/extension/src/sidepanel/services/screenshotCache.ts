@@ -81,10 +81,13 @@ export async function runScreenshotScan(
 	// Phase 2: Send to server for AI summarization (server auto-caches)
 	onProgress?.({ phase: "summarizing", done: 0, total: screenshots.size });
 
-	const payload = [...screenshots.entries()].map(([tabId, image]) => {
-		const tab = tabs.find((t) => t.id === tabId)!;
-		return { tabId, image, title: tab.title, url: tab.url };
-	});
+	const payload = [...screenshots.entries()]
+		.map(([tabId, image]) => {
+			const tab = tabs.find((t) => t.id === tabId);
+			if (!tab) return null; // tab closed during scan
+			return { tabId, image, title: tab.title, url: tab.url };
+		})
+		.filter((x): x is NonNullable<typeof x> => x !== null);
 
 	// Chunk to match server's .max(10) limit on the screenshots array
 	const BATCH_SIZE = 10;

@@ -470,6 +470,10 @@ class CodexAppServer {
 		this.threadId = null;
 	}
 
+	isRunning(): boolean {
+		return !!this.proc && !this.proc.killed && this.initialized;
+	}
+
 	async shutdown(): Promise<void> {
 		if (this.proc && !this.proc.killed) {
 			this.proc.kill();
@@ -636,6 +640,7 @@ const AI_EDIT_MEMORIES_SCHEMA = {
 export async function aiEditMemories(
 	instruction: string,
 ): Promise<{ memories: Array<{ id: string; observation: string }>; summary: string }> {
+	codex.resetThread(); // memory editing is independent of organize/refine context
 	const currentMemories = storage.getMemories();
 
 	const prompt = `You are managing a list of AI memories/preferences for a tab organizer.
@@ -739,11 +744,7 @@ export async function getAvailableModels(): Promise<Array<{ id: string; name: st
 	return codex.listModels();
 }
 
-export async function checkCodexHealth(): Promise<boolean> {
-	try {
-		await codex.ensureRunning();
-		return true;
-	} catch {
-		return false;
-	}
+export function checkCodexHealth(): boolean {
+	// Only inspect current state — don't spawn the process as a side effect
+	return codex.isRunning();
 }
