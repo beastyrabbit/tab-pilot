@@ -24,22 +24,14 @@ export async function captureTabScreenshot(
 		const width = Math.ceil(size?.width || 1280);
 		const height = Math.min(Math.ceil(size?.height || 900), maxHeight);
 
-		// Set viewport to capture full height
-		await chrome.debugger.sendCommand({ tabId }, "Emulation.setDeviceMetricsOverride", {
-			width,
-			height,
-			deviceScaleFactor: 1,
-			mobile: false,
-		});
-
-		// Capture
+		// Capture the current viewport without resizing — avoids visible layout reflow
+		// and the "DevTools is debugging" banner is shown for a shorter duration.
 		const result = (await chrome.debugger.sendCommand({ tabId }, "Page.captureScreenshot", {
 			format: "jpeg",
 			quality: 50,
+			clip: { x: 0, y: 0, width, height, scale: 1 },
 		})) as { data: string };
 
-		// Reset viewport and detach
-		await chrome.debugger.sendCommand({ tabId }, "Emulation.clearDeviceMetricsOverride");
 		await chrome.debugger.detach({ tabId });
 
 		return result.data;

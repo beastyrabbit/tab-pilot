@@ -141,6 +141,20 @@ class CodexAppServer {
 				reject(new Error("Codex app-server exited"));
 			}
 			this.pending.clear();
+
+			// Unblock any in-flight turn so callers don't hang forever
+			if (this.turnReject) {
+				this.turnReject(new Error("Codex app-server exited"));
+				this.turnResolve = null;
+				this.turnReject = null;
+				this.turnOutput = null;
+			}
+			// Drain the queue — each queued runTurn will re-enter _executeTurn → ensureRunning → restart
+			for (const next of this.turnQueue) {
+				next();
+			}
+			this.turnQueue = [];
+			this.turnRunning = false;
 		});
 
 		// Initialize
@@ -677,6 +691,7 @@ const SCREENSHOT_SUMMARY_SCHEMA = {
 export async function summarizeScreenshots(
 	screenshots: Array<{ tabId: number; image: string; title: string; url: string }>,
 ): Promise<Array<{ tabId: number; summary: string }>> {
+	codex.resetThread(); // screenshot summaries are independent of organize context
 	// Process in batches of 4 to avoid overloading the context
 	const batchSize = 4;
 	const allSummaries: Array<{ tabId: number; summary: string }> = [];
