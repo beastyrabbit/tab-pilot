@@ -4,9 +4,9 @@ import { enrichTabsWithContent } from "../services/chromeContentApi.js";
 import { collapseAndReorderGroups, groupTabs, updateGroup } from "../services/chromeTabsApi.js";
 import { startContentBridge } from "../services/contentBridge.js";
 import {
-	type ScanProgress,
 	getTabsNeedingScreenshots,
 	runScreenshotScan,
+	type ScanProgress,
 } from "../services/screenshotCache.js";
 import { serverApi } from "../services/serverApi.js";
 
@@ -157,7 +157,7 @@ export function useOrganize() {
 					try {
 						await updateGroup(gid, {
 							title: suggestion.groupName,
-							color: suggestion.color as chrome.tabGroups.ColorEnum,
+							color: suggestion.color,
 						});
 						console.log(`[apply] updateGroup OK for "${suggestion.groupName}"`);
 					} catch (e) {

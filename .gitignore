@@ -17,6 +17,7 @@ apps/server/data/
 
 # Codex local config
 .codex/
+.ref/
 *.swp
 *.swo
 

@@ -30,7 +30,7 @@ export function GroupProposal({
 	onApply,
 	onDismiss,
 }: GroupProposalProps) {
-	const [enabled, setEnabled] = useState<Record<number, boolean>>(
+	const [enabled, setEnabled] = useState<Record<number, boolean>>(() =>
 		Object.fromEntries(suggestions.map((_, i) => [i, true])),
 	);
 
@@ -63,7 +63,7 @@ export function GroupProposal({
 				<div className="p-2 space-y-2">
 					{suggestions.map((suggestion, index) => (
 						<div
-							key={`${suggestion.groupName}-${index}`}
+							key={`${suggestion.groupName}-${suggestion.existingGroupId ?? "new"}-${suggestion.tabIds.join(",")}`}
 							className={`border-l-2 rounded-r-lg p-2 ${COLOR_BG[suggestion.color] || COLOR_BG.grey} ${
 								!enabled[index] ? "opacity-40" : ""
 							}`}

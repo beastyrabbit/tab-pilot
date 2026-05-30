@@ -41,7 +41,11 @@ function Favicon({
 	url,
 	pageUrl,
 	className,
-}: { url?: string; pageUrl?: string; className?: string }) {
+}: {
+	url?: string;
+	pageUrl?: string;
+	className?: string;
+}) {
 	const [failed, setFailed] = useState(false);
 	const [chromeFailed, setChromeFailed] = useState(false);
 
@@ -76,7 +80,11 @@ function FeedbackInput({
 	placeholder,
 	disabled,
 	onSubmit,
-}: { placeholder: string; disabled: boolean; onSubmit: (text: string) => void }) {
+}: {
+	placeholder: string;
+	disabled: boolean;
+	onSubmit: (text: string) => void;
+}) {
 	const [text, setText] = useState("");
 
 	const handleKeyDown = (e: React.KeyboardEvent) => {

@@ -2,6 +2,15 @@ import type { TabGroupInfo, TabInfo } from "@tab-orga/shared";
 
 const isChromeExtension = typeof chrome !== "undefined" && !!chrome.tabs;
 
+type ChromeTabIds = number | [number, ...number[]];
+
+const toChromeTabIds = (tabIds: number[]): ChromeTabIds => {
+	if (tabIds.length === 0) {
+		throw new Error("Cannot group or ungroup an empty tab list");
+	}
+	return tabIds.length === 1 ? tabIds[0] : (tabIds as [number, ...number[]]);
+};
+
 export async function getAllTabs(): Promise<TabInfo[]> {
 	if (!isChromeExtension) return [];
 	const tabs = await chrome.tabs.query({ currentWindow: true });
@@ -33,15 +42,18 @@ export async function getAllGroups(): Promise<TabGroupInfo[]> {
 
 export async function groupTabs(tabIds: number[], groupId?: number): Promise<number> {
 	if (!isChromeExtension) return -1;
+	if (tabIds.length === 0) return -1;
+	const group = chrome.tabs.group as (options: chrome.tabs.GroupOptions) => Promise<number>;
+	const chromeTabIds = toChromeTabIds(tabIds);
 	if (groupId !== undefined) {
-		return chrome.tabs.group({ tabIds, groupId });
+		return await group({ tabIds: chromeTabIds, groupId });
 	}
-	return chrome.tabs.group({ tabIds });
+	return await group({ tabIds: chromeTabIds });
 }
 
 export async function updateGroup(
 	groupId: number,
-	properties: { title?: string; color?: chrome.tabGroups.ColorEnum; collapsed?: boolean },
+	properties: chrome.tabGroups.UpdateProperties,
 ): Promise<void> {
 	if (!isChromeExtension) return;
 	await chrome.tabGroups.update(groupId, properties);
@@ -49,12 +61,14 @@ export async function updateGroup(
 
 export async function ungroupTabs(tabIds: number[]): Promise<void> {
 	if (!isChromeExtension) return;
-	await chrome.tabs.ungroup(tabIds);
+	if (tabIds.length === 0) return;
+	await chrome.tabs.ungroup(toChromeTabIds(tabIds));
 }
 
 export async function moveTabToGroup(tabId: number, groupId: number): Promise<void> {
 	if (!isChromeExtension) return;
-	await chrome.tabs.group({ tabIds: [tabId], groupId });
+	const group = chrome.tabs.group as (options: chrome.tabs.GroupOptions) => Promise<number>;
+	await group({ tabIds: tabId, groupId });
 }
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));

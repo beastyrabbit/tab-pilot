@@ -98,8 +98,8 @@ tab-pilot/
 
 ### Prerequisites
 
-- **Node.js** ≥ 20
-- **pnpm** ≥ 9
+- **Node.js** ≥ 26
+- **pnpm** ≥ 11
 - **Codex CLI** — installed and in your PATH ([install guide](https://github.com/openai/codex))
 - **Chrome** or **Chromium** ≥ 120
 

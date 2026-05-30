@@ -5,7 +5,11 @@ function Favicon({
 	url,
 	pageUrl,
 	className,
-}: { url?: string; pageUrl?: string; className?: string }) {
+}: {
+	url?: string;
+	pageUrl?: string;
+	className?: string;
+}) {
 	const [failed, setFailed] = useState(false);
 	const [googleFailed, setGoogleFailed] = useState(false);
 

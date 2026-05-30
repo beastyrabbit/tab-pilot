@@ -61,10 +61,7 @@ const TOOLS = [
 
 // ── Tool Execution ──────────────────────────────────────────────────────
 
-async function executeGetPageContent(args: {
-	tabIds: number[];
-	reason?: string;
-}): Promise<string> {
+async function executeGetPageContent(args: { tabIds: number[]; reason?: string }): Promise<string> {
 	const { tabIds, reason } = args;
 	console.error(`[mcp] get_page_content: tabs=${tabIds.join(",")} reason="${reason || "none"}"`);
 
