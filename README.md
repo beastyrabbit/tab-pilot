@@ -100,6 +100,7 @@ tab-pilot/
 
 - **Node.js** ≥ 22.19.0
 - **pnpm** ≥ 11
+- **Docker** with Compose for the local production server
 - **Pi Codex auth** — run `pnpm pi:login` once after installing dependencies
 - **Chrome** or **Chromium** ≥ 120
 
@@ -111,34 +112,67 @@ git clone https://github.com/beastyrabbit/tab-pilot.git
 cd tab-pilot
 
 # Install dependencies
-pnpm install
+pnpm install --frozen-lockfile
 
 # Authenticate the Pi openai-codex provider
 pnpm pi:login
 
-# Build the extension
-pnpm build:extension
+# Build the server and extension
+pnpm build
 ```
 
-### Start the Server
+### Run the Local Production Server
 
 ```bash
-pnpm dev:server
+docker compose up -d --build
+docker compose logs -f tab-pilot-server
 ```
 
-The server runs on `http://127.0.0.1:7777`. Verify with:
+The server uses Docker host networking and binds to `127.0.0.1:7777` on the host. Runtime data is stored in
+`apps/server/data`. Pi auth is mounted from `apps/server/auth.json`, so it survives image
+rebuilds. Verify with:
 
 ```bash
 curl http://127.0.0.1:7777/api/health
 ```
 
-### Load the Extension
+Daily start after the image has already been built:
 
-1. Open `chrome://extensions/`
-2. Enable **Developer mode** (top right)
-3. Click **Load unpacked**
-4. Select the `apps/extension/dist/` folder
-5. Click the Tab Pilot icon — the side panel opens
+```bash
+docker compose up -d
+```
+
+### Install the Local CRX
+
+```bash
+pnpm crx:pack
+pnpm crx:install
+```
+
+`pnpm crx:pack` writes ignored local artifacts under `apps/extension/.local/`:
+
+- `tab-pilot.pem` is the persistent key. Keep it forever; replacing it changes the extension ID.
+- `tab-pilot.crx` is the packed extension.
+- `updates.xml` is the local Chromium update manifest.
+- `chromium-managed-policy.json` is the managed policy for force-installing the local CRX.
+- `chromium-external-extension.json` is the legacy Linux external install JSON.
+
+`pnpm crx:install` also tries to write the managed policy JSON to
+`/etc/chromium/policies/managed/tab-pilot.json`. If the current user cannot write there, the script
+prints the exact `sudo install -Dm644 ...` command to run. Restart Chromium after installing or
+updating the policy; Tab Pilot should appear as policy-installed without enabling Developer Mode.
+
+If you specifically want the older Linux external extension preferences flow instead of managed
+policy, use `pnpm crx:install-external`.
+
+When changing extension code, run `pnpm build`, repack with the same PEM key, and bump
+`apps/extension/manifest.json` `version` when Chromium needs to pick up the update.
+
+Detailed local production docs:
+
+- [Local Production Setup](docs/local-production.md)
+- [Docker Server](docs/docker-server.md)
+- [Chromium CRX Install](docs/chromium-crx.md)
 
 ---
 
@@ -181,6 +215,10 @@ pnpm dev:extension
 
 # Build extension for loading
 pnpm build:extension
+
+# Build and smoke-check the production server
+pnpm build:server
+pnpm smoke:server
 
 # Run tests
 pnpm test

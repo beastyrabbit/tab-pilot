@@ -1,0 +1,14 @@
+services:
+  tab-pilot-server:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+      network: host
+    network_mode: host
+    environment:
+      TAB_ORGA_HOST: "127.0.0.1"
+      TAB_ORGA_DATA_DIR: "/data"
+    volumes:
+      - ./apps/server/auth.json:/app/apps/server/auth.json:rw
+      - ./apps/server/data:/data:rw
+    restart: unless-stopped

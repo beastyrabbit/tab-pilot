@@ -2,7 +2,10 @@ import { serve } from "@hono/node-server";
 import { app } from "./app.js";
 import { timestamp } from "./services/organize-debug-log.js";
 
-const port = 7777;
+const port = Number(process.env.TAB_ORGA_PORT || 7777);
+if (!Number.isInteger(port) || port < 0 || port > 65535) {
+	throw new Error(`Invalid TAB_ORGA_PORT: ${process.env.TAB_ORGA_PORT}`);
+}
 const hostname = process.env.TAB_ORGA_HOST || "127.0.0.1";
 const server = serve({ fetch: app.fetch, hostname, port });
 const debug = process.env.TAB_ORGA_DEBUG === "1";

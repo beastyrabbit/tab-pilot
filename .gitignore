@@ -6,6 +6,9 @@ dist/
 # Server runtime data
 apps/server/data/
 
+# Local extension packages and persistent CRX key
+apps/extension/.local/
+
 # Environment
 .env
 .env.local
