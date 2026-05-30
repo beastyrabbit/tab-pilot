@@ -20,6 +20,7 @@ describe("Prompt builders", () => {
 		]);
 		expect(prompt).toContain("User prefers GitHub in Development");
 		expect(prompt).toContain("Learned user preferences");
+		expect(prompt).toContain("[1]");
 	});
 
 	it("buildGroupingPrompt formats tabs in TOON tabular format", () => {

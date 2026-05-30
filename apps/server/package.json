@@ -4,22 +4,25 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "TAB_ORGA_DEBUG=1 tsx watch src/index.ts",
     "build": "tsup src/index.ts --format esm --dts",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@earendil-works/pi-agent-core": "0.78.0",
+    "@earendil-works/pi-ai": "0.78.0",
     "@hono/node-server": "^2.0.4",
     "@hono/zod-validator": "^0.8.0",
     "@tab-orga/shared": "workspace:*",
     "@toon-format/toon": "^2.3.0",
+    "drizzle-orm": "1.0.0-beta.16-c2458b2",
     "hono": "^4.12.23",
     "nanoid": "^5.1.11",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/node": "^25.9.1",
+    "@types/node": "^22.19.19",
     "tsup": "^8.5.1",
     "tsx": "^4.22.3",
     "typescript": "^6.0.3",

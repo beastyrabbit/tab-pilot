@@ -41,9 +41,10 @@ const BG_DARK: Record<string, string> = {
 	orange: "#3A2410",
 };
 
-/** Border-left style using Chrome's actual group color */
+/** Subtle inset accent using Chrome's actual group color */
 export function chromeBorderStyle(color: string): React.CSSProperties {
-	return { borderLeftColor: CHROME_GROUP_COLORS[color] || CHROME_GROUP_COLORS.grey };
+	const accent = CHROME_GROUP_COLORS[color] || CHROME_GROUP_COLORS.grey;
+	return { boxShadow: `inset 3px 0 0 ${accent}` };
 }
 
 /**

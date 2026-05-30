@@ -3,9 +3,9 @@ import { useState } from "react";
 
 interface MemoryManagerProps {
 	memories: AIMemory[];
-	onUpdate: (id: string, observation: string) => void;
-	onDelete: (id: string) => void;
-	onClearAll: () => void;
+	onUpdate: (id: string, observation: string) => void | Promise<void>;
+	onDelete: (id: string) => void | Promise<void>;
+	onClearAll: () => void | Promise<void>;
 	onAIEdit: (instruction: string) => Promise<string>;
 	onClose: () => void;
 }
@@ -16,17 +16,21 @@ function MemoryItem({
 	onDelete,
 }: {
 	memory: AIMemory;
-	onUpdate: (id: string, text: string) => void;
-	onDelete: (id: string) => void;
+	onUpdate: (id: string, text: string) => void | Promise<void>;
+	onDelete: (id: string) => void | Promise<void>;
 }) {
 	const [editing, setEditing] = useState(false);
-	const [text, setText] = useState(memory.observation);
+	const [draftText, setDraftText] = useState<string | null>(null);
+	const text = draftText ?? memory.observation;
 
 	const handleSave = () => {
 		if (text.trim() && text.trim() !== memory.observation) {
-			onUpdate(memory.id, text.trim());
+			Promise.resolve(onUpdate(memory.id, text.trim())).catch((error) => {
+				console.warn("[memory] Failed to update memory:", error);
+			});
 		}
 		setEditing(false);
+		setDraftText(null);
 	};
 
 	return (
@@ -34,8 +38,9 @@ function MemoryItem({
 			<div className="flex-1 min-w-0">
 				{editing ? (
 					<textarea
+						aria-label="Edit memory"
 						value={text}
-						onChange={(e) => setText(e.target.value)}
+						onChange={(e) => setDraftText(e.target.value)}
 						onBlur={handleSave}
 						onKeyDown={(e) => {
 							if (e.key === "Enter" && !e.shiftKey) {
@@ -43,18 +48,20 @@ function MemoryItem({
 								handleSave();
 							}
 							if (e.key === "Escape") {
-								setText(memory.observation);
+								setDraftText(null);
 								setEditing(false);
 							}
 						}}
 						className="w-full text-sm text-gray-800 dark:text-gray-200 bg-transparent border border-blue-400 rounded p-1 outline-none resize-none"
 						rows={2}
-						autoFocus
 					/>
 				) : (
 					<button
 						type="button"
-						onClick={() => setEditing(true)}
+						onClick={() => {
+							setDraftText(memory.observation);
+							setEditing(true);
+						}}
 						className="text-left text-sm text-gray-800 dark:text-gray-200 hover:text-blue-600 dark:hover:text-blue-400 w-full"
 						title="Click to edit"
 					>
@@ -67,11 +74,16 @@ function MemoryItem({
 			</div>
 			<button
 				type="button"
-				onClick={() => onDelete(memory.id)}
+				aria-label="Delete memory"
+				onClick={() => {
+					Promise.resolve(onDelete(memory.id)).catch((error) => {
+						console.warn("[memory] Failed to delete memory:", error);
+					});
+				}}
 				className="text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 p-1 flex-shrink-0"
 				title="Delete"
 			>
-				<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+				<svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 					<path
 						strokeLinecap="round"
 						strokeLinejoin="round"
@@ -102,7 +114,9 @@ export function MemoryManager({
 			setConfirmClear(true);
 			return;
 		}
-		onClearAll();
+		Promise.resolve(onClearAll()).catch((error) => {
+			console.warn("[memory] Failed to clear memories:", error);
+		});
 		setConfirmClear(false);
 	};
 
@@ -131,10 +145,11 @@ export function MemoryManager({
 					</h2>
 					<button
 						type="button"
+						aria-label="Close memories"
 						onClick={onClose}
 						className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 p-1"
 					>
-						<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 							<path
 								strokeLinecap="round"
 								strokeLinejoin="round"
@@ -153,6 +168,7 @@ export function MemoryManager({
 					<div className="flex gap-2">
 						<input
 							type="text"
+							aria-label="AI memory edit instruction"
 							value={aiInstruction}
 							onChange={(e) => setAIInstruction(e.target.value)}
 							onKeyDown={(e) => {
@@ -169,7 +185,7 @@ export function MemoryManager({
 							className="px-3 py-1.5 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 flex-shrink-0"
 						>
 							{aiWorking ? (
-								<span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" />
+								<span className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" />
 							) : (
 								"Go"
 							)}

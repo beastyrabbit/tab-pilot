@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../services/codex.js", () => ({
-	checkCodexHealth: vi.fn().mockReturnValue(false),
+	checkCodexHealth: vi.fn().mockResolvedValue(false),
 }));
 
 const { app } = await import("../app.js");

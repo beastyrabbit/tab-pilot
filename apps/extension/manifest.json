@@ -10,7 +10,9 @@
     "sidePanel",
     "scripting",
     "debugger",
-    "favicon"
+    "favicon",
+    "alarms",
+    "storage"
   ],
   "host_permissions": [
     "http://*/*",

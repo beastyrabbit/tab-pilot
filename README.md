@@ -20,7 +20,7 @@
   <img src="https://img.shields.io/badge/chrome-MV3-blue?logo=googlechrome&logoColor=white" alt="Chrome MV3" />
   <img src="https://img.shields.io/badge/react-19-61dafb?logo=react&logoColor=white" alt="React 19" />
   <img src="https://img.shields.io/badge/hono-server-orange?logo=hono&logoColor=white" alt="Hono" />
-  <img src="https://img.shields.io/badge/codex-AI-purple" alt="Codex AI" />
+  <img src="https://img.shields.io/badge/pi%20codex-AI-purple" alt="Pi Codex AI" />
   <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License" />
 </p>
 
@@ -40,19 +40,19 @@
 
 ## Features
 
-**Smart Grouping** — Click "Organize" and the AI analyzes your tabs by title, URL, meta descriptions, and optionally full page content, then suggests logical groups.
+**Smart Grouping** — Click "Organize" and the AI analyzes your tabs by title, URL, metadata, cached summaries, and targeted full page content when needed, then suggests logical groups.
 
 **Preview Before Apply** — See proposed groups in a color-coded proposal view. Approve, dismiss, or refine with natural language feedback ("move YouTube to Entertainment", "keep GitHub separate").
 
 **Existing Group Awareness** — Respects your manually created groups. The AI extends them rather than creating duplicates.
 
-**Content Extraction** — Configurable depth: title+URL only, meta descriptions, or full page text for the most accurate grouping.
+**Content Extraction** — Metadata and cached screenshot summaries are always available to the AI. Full page text is fetched on demand for ambiguous tabs.
 
-**AI Memory** — The AI learns your preferences over time. Corrections are analyzed and stored as memories that influence future suggestions.
+**AI Memory** — Save reusable organization preferences as memories that influence future suggestions.
 
 **User Rules** — Define deterministic rules ("github.com → Development") that are applied before the AI runs.
 
-**Screenshot Summaries** — Background tab screenshots are captured and summarized by AI, enabling deep full-text search across all your tabs.
+**Screenshot Summaries** — The background service worker scans missing tab summaries, caches them server-side, and shows red/yellow/green status dots in the tab list.
 
 **Drag & Drop** — Manually move tabs between groups with drag-and-drop in the side panel.
 
@@ -64,17 +64,17 @@
 
 ```
 ┌─────────────────────────┐     ┌───────────────────────┐     ┌──────────────┐
-│   Chrome Extension      │     │   Local Server        │     │   Codex CLI  │
-│   (Side Panel UI)       │◄───►│   localhost:7777      │◄───►│   (AI)       │
+│   Chrome Extension      │     │   Local Server        │     │   Pi Agent   │
+│   (Side Panel UI)       │◄───►│   127.0.0.1:7777     │◄───►│ openai-codex │
 │                         │     │                       │     │              │
-│  React 19 + Vite        │     │  Hono + TypeScript    │     │  GPT / Claude│
-│  TailwindCSS            │     │  Memory & Rules (JSON)│     │  etc.        │
-│  chrome.tabs/tabGroups  │     │  Screenshot cache     │     │              │
+│  React 19 + Vite        │     │  Hono + TypeScript    │     │  Tool calls  │
+│  TailwindCSS            │     │  SQLite + Drizzle     │     │  Summaries   │
+│  chrome.tabs/tabGroups  │     │  Memory & summaries   │     │              │
 │  @dnd-kit (drag & drop) │     │  Content bridge (SSE) │     │              │
 └─────────────────────────┘     └───────────────────────┘     └──────────────┘
 ```
 
-**Why a local server?** Your API key stays on disk (never in the browser), AI orchestration is simpler server-side, and memories/rules persist as JSON files. Swapping AI providers is a config change.
+**Why a local server?** Your API key stays on disk (never in the browser), AI orchestration is simpler server-side, and memories, rules, settings, and tab summaries persist in a local SQLite database. Swapping AI providers is a config change.
 
 ### Monorepo Structure
 
@@ -88,7 +88,7 @@ tab-pilot/
 │   └── src/content/        # Content script (on-demand extraction)
 └── apps/server/            # Companion server (Hono on port 7777)
     ├── src/routes/         # API endpoints
-    ├── src/services/       # Codex integration, storage, content bridge
+	    ├── src/services/       # Pi agent integration, storage, content bridge
     └── src/prompts/        # AI prompt builders
 ```
 
@@ -98,9 +98,9 @@ tab-pilot/
 
 ### Prerequisites
 
-- **Node.js** ≥ 26
+- **Node.js** ≥ 22.19.0
 - **pnpm** ≥ 11
-- **Codex CLI** — installed and in your PATH ([install guide](https://github.com/openai/codex))
+- **Pi Codex auth** — run `pnpm pi:login` once after installing dependencies
 - **Chrome** or **Chromium** ≥ 120
 
 ### Install & Build
@@ -113,6 +113,9 @@ cd tab-pilot
 # Install dependencies
 pnpm install
 
+# Authenticate the Pi openai-codex provider
+pnpm pi:login
+
 # Build the extension
 pnpm build:extension
 ```
@@ -123,10 +126,10 @@ pnpm build:extension
 pnpm dev:server
 ```
 
-The server runs on `http://localhost:7777`. Verify with:
+The server runs on `http://127.0.0.1:7777`. Verify with:
 
 ```bash
-curl http://localhost:7777/api/health
+curl http://127.0.0.1:7777/api/health
 ```
 
 ### Load the Extension
@@ -145,21 +148,20 @@ curl http://localhost:7777/api/health
 
 1. Open several tabs across different topics
 2. Open the Tab Pilot side panel
-3. Click **Organize**
+3. Optionally enter a one-off instruction, then click **Organize**
 4. Review the AI's proposed groups in the preview
-5. Optionally type feedback to refine ("put Twitch in its own group")
+5. Optionally type feedback to update the proposal ("put Twitch in its own group")
 6. Click **Apply** to create the Chrome tab groups
 
 ### Settings
 
 - **Model** — Choose which AI model to use
-- **Content Depth** — How much page content to send to the AI
-  - *Title + URL* — fastest, works for most cases
-  - *Meta descriptions* — better accuracy
-  - *Full page content* — best accuracy, slower
 - **General Behavior** — Custom instructions (e.g., "homelab is always a good group")
+- **Organization Thinking** — Reasoning level for organize and refine
+- **Summary Thinking** — Reasoning level for screenshot summaries
+- **Speed** — Economy, Standard, or Priority service tier
 - **Test Mode** — Preview without applying changes
-- **Dissolve All Groups** — Remove all tab groups at once
+- **Ungroup all** — Remove all tab groups in the current Chrome window from the main toolbar
 
 ### Memory & Rules
 
@@ -193,9 +195,9 @@ pnpm lint:fix
 | Layer | Technology |
 |-------|-----------|
 | Extension UI | React 19, Vite, TailwindCSS 3, @dnd-kit |
-| Extension APIs | chrome.tabs, chrome.tabGroups, chrome.scripting, chrome.debugger |
-| Server | Hono, TypeScript, Zod validation |
-| AI Backend | Codex CLI (app-server JSON-RPC protocol) |
+| Extension APIs | chrome.tabs, chrome.tabGroups, chrome.scripting, chrome.debugger, chrome.alarms, chrome.storage |
+| Server | Hono, TypeScript, Zod validation, SQLite, Drizzle |
+| AI Backend | Pi Agent with openai-codex tool calls |
 | Monorepo | pnpm workspaces |
 | Quality | Biome (lint + format), Vitest, Lefthook (git hooks) |
 

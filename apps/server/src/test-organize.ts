@@ -1,6 +1,6 @@
 /**
  * Manual test: run with `npx tsx apps/server/src/test-organize.ts`
- * Tests the full organize flow against a live Codex app-server.
+ * Tests the full organize flow against Pi's openai-codex provider.
  */
 import { organizeWithAI } from "./services/codex.js";
 
@@ -56,7 +56,7 @@ const fakeRequest = {
 		},
 	],
 	existingGroups: [],
-	contentDepth: "title-url" as const,
+	instruction: "Use compact groups and leave ambiguous tabs ungrouped.",
 };
 
 console.log("Testing organize with 6 fake tabs...\n");

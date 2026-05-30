@@ -6,6 +6,10 @@ import { contentBridge } from "../services/content-bridge.js";
 // Shared secret generated at startup — must be included as X-Bridge-Token header
 // by any caller of the content-bridge mutation endpoints.
 const BRIDGE_TOKEN = crypto.randomUUID();
+const CONFIGURED_EXTENSION_ORIGIN = process.env.TAB_ORGA_EXTENSION_ID
+	? `chrome-extension://${process.env.TAB_ORGA_EXTENSION_ID}`
+	: null;
+let trustedExtensionOrigin: string | null = CONFIGURED_EXTENSION_ORIGIN;
 
 export function getBridgeToken(): string {
 	return BRIDGE_TOKEN;
@@ -13,14 +17,22 @@ export function getBridgeToken(): string {
 
 export const contentBridgeRoute = new Hono();
 
+function allowExtensionOrigin(origin: string): boolean {
+	if (!origin) return true;
+	if (!origin.startsWith("chrome-extension://")) return false;
+	if (trustedExtensionOrigin) return origin === trustedExtensionOrigin;
+	trustedExtensionOrigin = origin;
+	console.warn(`[content-bridge] Trusting extension origin for this server run: ${origin}`);
+	return true;
+}
+
 /**
  * Token endpoint — only allows chrome-extension:// origins.
- * Non-browser callers (like the MCP server on localhost) aren't subject to CORS.
+ * Non-browser local callers are not subject to CORS.
  */
 contentBridgeRoute.get("/content-bridge/token", (c) => {
 	const origin = c.req.header("origin") || "";
-	// Only allow chrome-extension:// origins (or no origin for server-to-server calls)
-	if (origin && !origin.startsWith("chrome-extension://")) {
+	if (!allowExtensionOrigin(origin)) {
 		return c.json({ error: "Forbidden" }, 403);
 	}
 	// Set restrictive CORS for this endpoint only
@@ -30,7 +42,7 @@ contentBridgeRoute.get("/content-bridge/token", (c) => {
 
 contentBridgeRoute.get("/content-bridge/events", (c) => {
 	const origin = c.req.header("origin") || "";
-	if (origin && !origin.startsWith("chrome-extension://")) {
+	if (!allowExtensionOrigin(origin)) {
 		return c.json({ error: "Forbidden" }, 403);
 	}
 	return streamSSE(c, async (stream) => {
@@ -80,7 +92,7 @@ function requireBridgeToken(c: { req: { header: (name: string) => string | undef
 	return c.req.header("x-bridge-token") === BRIDGE_TOKEN;
 }
 
-// Called by the MCP server process to request content extraction
+// Optional local bridge endpoint for requesting extension-side content extraction.
 contentBridgeRoute.post("/content-bridge/request", async (c) => {
 	if (!requireBridgeToken(c)) {
 		return c.json({ error: "Unauthorized" }, 401);

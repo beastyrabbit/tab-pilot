@@ -1,18 +1,39 @@
 export type {
 	AIEditMemoriesRequest,
 	AIEditMemoriesResponse,
+	AppendStoredTabsRequest,
 	ContentDepth,
+	CreateStoredTabSetRequest,
 	ErrorResponse,
+	GetOrganizeRunResponse,
 	GroupingSuggestion,
 	HealthResponse,
 	LearnRequest,
+	MemoryCandidate,
+	MemoryCheck,
 	ModelInfo,
 	ModelsResponse,
 	OrganizeRequest,
 	OrganizeResponse,
+	OrganizeRun,
+	OrganizeRunPhase,
 	RefineRequest,
 	RefineResponse,
+	StartOrganizeRunResponse,
+	StoredTab,
+	StoredTabInput,
+	StoredTabMetadata,
+	StoredTabSet,
+	StoredTabSetSuggestion,
+	StoredTabSetSummary,
+	TabSummarySnapshot,
 } from "./types/api.js";
 export type { AIMemory, MemorySource, RuleMatchType, UserRule } from "./types/memory.js";
-export type { PublicSettings, ServerSettings } from "./types/settings.js";
+export type {
+	GroupTitleLength,
+	PublicSettings,
+	ServerSettings,
+	ServiceTier,
+	ThinkingLevel,
+} from "./types/settings.js";
 export type { GroupColor, TabGroupInfo, TabInfo } from "./types/tab.js";

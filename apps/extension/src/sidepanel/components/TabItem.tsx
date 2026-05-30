@@ -1,5 +1,13 @@
 import type { TabGroupInfo, TabInfo } from "@tab-orga/shared";
 import { useState } from "react";
+import type { SummaryStatus } from "../services/screenshotCache.js";
+
+const SUMMARY_LED: Record<SummaryStatus, { className: string; label: string }> = {
+	stage2: { className: "bg-green-500", label: "Stage 2 screenshot summary ready" },
+	stage1: { className: "bg-pink-500", label: "Stage 1 metadata summary ready" },
+	missing: { className: "bg-red-500", label: "AI summary missing" },
+	"in-progress": { className: "bg-yellow-400", label: "AI summary in progress" },
+};
 
 function Favicon({
 	url,
@@ -44,12 +52,26 @@ function Favicon({
 interface TabItemProps {
 	tab: TabInfo;
 	groups?: TabGroupInfo[];
+	summaryStatus?: SummaryStatus;
 	onMoveToGroup?: (tabId: number, groupId: number) => void;
 	onUngroup?: (tabId: number) => void;
 }
 
-export function TabItem({ tab, groups, onMoveToGroup, onUngroup }: TabItemProps) {
+export function TabItem({
+	tab,
+	groups,
+	summaryStatus = "missing",
+	onMoveToGroup,
+	onUngroup,
+}: TabItemProps) {
 	const [showMenu, setShowMenu] = useState(false);
+	const summaryLed = SUMMARY_LED[summaryStatus];
+	const moveTargets: TabGroupInfo[] = [];
+	if (groups) {
+		for (const group of groups) {
+			if (group.id !== tab.groupId) moveTargets.push(group);
+		}
+	}
 
 	const domain = (() => {
 		try {
@@ -61,7 +83,12 @@ export function TabItem({ tab, groups, onMoveToGroup, onUngroup }: TabItemProps)
 
 	return (
 		<div className="flex items-center gap-2 py-1.5 px-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700/50 group/tab relative">
-			<Favicon url={tab.favIconUrl} pageUrl={tab.url} className="w-4 h-4 flex-shrink-0" />
+			<span
+				className={`size-2 rounded-full flex-shrink-0 ${summaryLed.className}`}
+				title={summaryLed.label}
+				aria-hidden="true"
+			/>
+			<Favicon url={tab.favIconUrl} pageUrl={tab.url} className="size-4 flex-shrink-0" />
 			<div className="min-w-0 flex-1">
 				<div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
 					{tab.title}
@@ -69,15 +96,16 @@ export function TabItem({ tab, groups, onMoveToGroup, onUngroup }: TabItemProps)
 				<div className="text-xs text-gray-400 dark:text-gray-500 truncate">{domain}</div>
 			</div>
 
-			{groups && groups.length > 0 && onMoveToGroup && (
+			{moveTargets.length > 0 && onMoveToGroup && (
 				<div className="relative">
 					<button
 						type="button"
+						aria-label="Move tab"
 						onClick={() => setShowMenu(!showMenu)}
 						className="invisible group-hover/tab:visible text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 p-0.5"
 						title="Move to group"
 					>
-						<svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<svg className="size-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 							<path
 								strokeLinecap="round"
 								strokeLinejoin="round"
@@ -88,21 +116,19 @@ export function TabItem({ tab, groups, onMoveToGroup, onUngroup }: TabItemProps)
 					</button>
 					{showMenu && (
 						<div className="absolute right-0 top-full mt-1 w-36 bg-white dark:bg-gray-700 border dark:border-gray-600 rounded-lg shadow-lg z-20 py-1">
-							{groups
-								.filter((g) => g.id !== tab.groupId)
-								.map((g) => (
-									<button
-										key={g.id}
-										type="button"
-										onClick={() => {
-											onMoveToGroup(tab.id, g.id);
-											setShowMenu(false);
-										}}
-										className="w-full text-left px-3 py-1 text-[10px] hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200"
-									>
-										{g.title || "Untitled"}
-									</button>
-								))}
+							{moveTargets.map((g) => (
+								<button
+									key={g.id}
+									type="button"
+									onClick={() => {
+										onMoveToGroup(tab.id, g.id);
+										setShowMenu(false);
+									}}
+									className="w-full text-left px-3 py-1 text-[10px] hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200"
+								>
+									{g.title || "Untitled"}
+								</button>
+							))}
 							{tab.groupId !== -1 && onUngroup && (
 								<button
 									type="button"

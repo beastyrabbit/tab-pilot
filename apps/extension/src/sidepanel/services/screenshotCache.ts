@@ -1,8 +1,33 @@
 import type { TabInfo } from "@tab-orga/shared";
+import { extractTabContent } from "./chromeContentApi.js";
 import { captureTabScreenshot } from "./chromeScreenshotApi.js";
+import { clientDebug } from "./clientDebug.js";
 import { serverApi } from "./serverApi.js";
 
-// ── Public: get cached summaries for search (from server) ─────────────
+export type SummaryStatus = "stage2" | "stage1" | "missing" | "in-progress";
+export type SummaryScanKind = "stage1" | "stage2";
+export type SummaryScanPriority = "normal" | "fast";
+export const SUMMARY_SCAN_PROGRESS_KEY = "tabSummaryScanProgress";
+export const SUMMARY_SCAN_MESSAGE_TYPE = "tab-orga:scan-missing-summaries";
+
+export interface ScanProgress {
+	kind: SummaryScanKind;
+	phase: "metadata" | "capturing" | "summarizing" | "done";
+	done: number;
+	total: number;
+	activeTabIds?: number[];
+}
+
+export interface StoredSummaryScanProgress extends ScanProgress {
+	running: boolean;
+	updatedAt: number;
+}
+
+export interface SummaryScanOptions {
+	concurrency?: number;
+	getConcurrency?: () => number;
+	shouldCancel?: () => boolean;
+}
 
 export async function getCachedSummaries(tabs: TabInfo[]): Promise<Map<number, string>> {
 	const urls = tabs.filter((t) => t.url.startsWith("http")).map((t) => t.url);
@@ -21,85 +46,277 @@ export async function getCachedSummaries(tabs: TabInfo[]): Promise<Map<number, s
 	}
 }
 
-// ── Public: determine which tabs need new screenshots ─────────────────
+export async function getSummaryStatuses(tabs: TabInfo[]): Promise<Map<number, SummaryStatus>> {
+	const statuses = new Map<number, SummaryStatus>();
+	const httpTabs = tabs.filter((t) => t.url.startsWith("http"));
+	for (const tab of tabs) {
+		statuses.set(tab.id, "missing");
+	}
+	if (httpTabs.length === 0) return statuses;
 
-export async function getTabsNeedingScreenshots(tabs: TabInfo[]): Promise<TabInfo[]> {
+	try {
+		const availability = await serverApi.lookupSummaryAvailability(httpTabs.map((t) => t.url));
+		for (const tab of httpTabs) {
+			const stage = availability[tab.url]?.stage;
+			statuses.set(
+				tab.id,
+				stage === "stage2" ? "stage2" : stage === "stage1" ? "stage1" : "missing",
+			);
+		}
+	} catch {
+		// Keep missing status when the server is offline or cache lookup fails.
+	}
+	return statuses;
+}
+
+export async function requestBackgroundSummaryScan(
+	kind: SummaryScanKind = "stage1",
+	priority: SummaryScanPriority = "normal",
+	options: { allowScreenshots?: boolean } = {},
+): Promise<void> {
+	if (typeof chrome === "undefined" || !chrome.runtime?.sendMessage) return;
+	try {
+		clientDebug("summary", "requesting background summary scan", {
+			kind,
+			priority,
+			allowScreenshots: options.allowScreenshots === true,
+		});
+		await chrome.runtime.sendMessage({
+			type: SUMMARY_SCAN_MESSAGE_TYPE,
+			kind,
+			priority,
+			allowScreenshots: options.allowScreenshots === true,
+		});
+	} catch {
+		// The side panel can still work without the background worker in tests/dev pages.
+	}
+}
+
+export async function getTabsNeedingStage1(tabs: TabInfo[]): Promise<TabInfo[]> {
 	const httpTabs = tabs.filter((t) => t.url.startsWith("http"));
 	if (httpTabs.length === 0) return [];
 
 	try {
-		const cachedUrls = await serverApi.checkCachedUrls(httpTabs.map((t) => t.url));
-		const needed = httpTabs.filter((t) => !cachedUrls.has(t.url));
-		console.log(
-			`[screenshot] ${needed.length}/${httpTabs.length} tabs need capture (${cachedUrls.size} cached)`,
+		const state = await serverApi.checkSummaryState(
+			httpTabs.map((t) => t.url),
+			"stage1",
 		);
-		return needed;
+		return httpTabs.filter((t) => !state.cached.has(t.url) && !state.stage1Blocked.has(t.url));
 	} catch {
-		// Server down — skip scanning
 		return [];
 	}
 }
 
-// ── Public: run screenshot scan in background ─────────────────────────
+export async function getTabsNeedingStage2(tabs: TabInfo[]): Promise<TabInfo[]> {
+	const httpTabs = tabs.filter((t) => t.url.startsWith("http"));
+	if (httpTabs.length === 0) return [];
 
-export interface ScanProgress {
-	phase: "capturing" | "summarizing" | "done";
-	done: number;
-	total: number;
+	try {
+		const cachedUrls = await serverApi.checkCachedUrls(
+			httpTabs.map((t) => t.url),
+			"stage2",
+		);
+		return httpTabs.filter((t) => !cachedUrls.has(t.url));
+	} catch {
+		return [];
+	}
+}
+
+export const getTabsNeedingScreenshots = getTabsNeedingStage2;
+
+function clampConcurrency(value: number, total: number): number {
+	return Math.max(1, Math.min(total, Math.floor(value) || 1));
+}
+
+async function runConcurrent(
+	total: number,
+	getConcurrency: () => number,
+	processIndex: (index: number) => Promise<void>,
+): Promise<void> {
+	let nextIndex = 0;
+	let activeWorkers = 0;
+	let finished = 0;
+
+	await new Promise<void>((resolve) => {
+		let intervalId: ReturnType<typeof setInterval> | undefined;
+		const launch = () => {
+			while (activeWorkers < getConcurrency() && nextIndex < total) {
+				const index = nextIndex++;
+				activeWorkers++;
+				void processIndex(index)
+					.catch((error) => {
+						console.warn("[summary] Failed to process tab:", error);
+					})
+					.finally(() => {
+						activeWorkers--;
+						finished++;
+						if (finished >= total) {
+							if (intervalId !== undefined) clearInterval(intervalId);
+							resolve();
+							return;
+						}
+						launch();
+					});
+			}
+		};
+		intervalId = setInterval(launch, 500);
+		launch();
+	});
+}
+
+export async function runStage1SummaryScan(
+	tabs: TabInfo[],
+	onProgress?: (progress: ScanProgress) => void,
+	preFiltered?: TabInfo[],
+	options: SummaryScanOptions = {},
+): Promise<void> {
+	const needSummary = preFiltered ?? (await getTabsNeedingStage1(tabs));
+	if (needSummary.length === 0) {
+		onProgress?.({ kind: "stage1", phase: "done", done: 0, total: 0 });
+		return;
+	}
+
+	const activeTabIds = new Set<number>();
+	let completed = 0;
+	let summarized = 0;
+	const getConcurrency = () =>
+		clampConcurrency(options.getConcurrency?.() ?? options.concurrency ?? 4, needSummary.length);
+
+	const emitProgress = (phase: ScanProgress["phase"]) => {
+		onProgress?.({
+			kind: "stage1",
+			phase,
+			done: completed,
+			total: needSummary.length,
+			activeTabIds: [...activeTabIds],
+		});
+	};
+
+	await runConcurrent(needSummary.length, getConcurrency, async (index) => {
+		const tab = needSummary[index];
+		activeTabIds.add(tab.id);
+		emitProgress("metadata");
+		try {
+			const metadata = await extractTabContent(tab.id, false);
+			emitProgress("summarizing");
+			const result = await serverApi.summarizeStage1([
+				{
+					tabId: tab.id,
+					title: tab.title,
+					url: tab.url,
+					metaDescription: metadata?.metaDescription || undefined,
+					ogDescription: metadata?.ogDescription || undefined,
+					keywords: metadata?.keywords || undefined,
+				},
+			]);
+			if (result.summaries.some((summary) => summary.tabId === tab.id && summary.summary)) {
+				summarized++;
+			} else {
+				await serverApi.markStage1Failures([
+					{
+						url: tab.url,
+						reason: metadata ? "Stage 1 returned no summary" : "Metadata unavailable",
+					},
+				]);
+			}
+		} catch (error) {
+			console.warn(`[stage1] Summary failed for tab ${tab.id}:`, error);
+			await serverApi
+				.markStage1Failures([
+					{
+						url: tab.url,
+						reason: error instanceof Error ? error.message : "Stage 1 failed",
+					},
+				])
+				.catch(() => {});
+		} finally {
+			completed++;
+			activeTabIds.delete(tab.id);
+			emitProgress("metadata");
+		}
+	});
+
+	onProgress?.({ kind: "stage1", phase: "done", done: summarized, total: needSummary.length });
 }
 
 export async function runScreenshotScan(
 	tabs: TabInfo[],
 	onProgress?: (progress: ScanProgress) => void,
 	preFiltered?: TabInfo[],
+	options: SummaryScanOptions = {},
 ): Promise<void> {
-	const needCapture = preFiltered ?? (await getTabsNeedingScreenshots(tabs));
+	const needCapture = preFiltered ?? (await getTabsNeedingStage2(tabs));
 
 	if (needCapture.length === 0) {
-		onProgress?.({ phase: "done", done: 0, total: 0 });
+		onProgress?.({ kind: "stage2", phase: "done", done: 0, total: 0 });
 		return;
 	}
 
-	// Phase 1: Capture screenshots
-	const screenshots = new Map<number, string>();
-	for (let i = 0; i < needCapture.length; i++) {
-		const tab = needCapture[i];
-		onProgress?.({ phase: "capturing", done: i, total: needCapture.length });
+	const activeTabIds = new Set<number>();
+	let completed = 0;
+	let summarized = 0;
+	const getConcurrency = () =>
+		clampConcurrency(options.getConcurrency?.() ?? options.concurrency ?? 1, needCapture.length);
 
+	const emitProgress = (phase: ScanProgress["phase"]) => {
+		onProgress?.({
+			kind: "stage2",
+			phase,
+			done: completed,
+			total: needCapture.length,
+			activeTabIds: [...activeTabIds],
+		});
+	};
+
+	await runConcurrent(needCapture.length, getConcurrency, async (index) => {
+		if (options.shouldCancel?.()) {
+			completed++;
+			emitProgress("capturing");
+			return;
+		}
+		const tab = needCapture[index];
+		activeTabIds.add(tab.id);
+		emitProgress("capturing");
+		clientDebug("stage2", "capturing screenshot", { tabId: tab.id });
 		const image = await captureTabScreenshot(tab.id, 10000);
-		if (image) {
-			screenshots.set(tab.id, image);
+		if (!image) {
+			completed++;
+			activeTabIds.delete(tab.id);
+			emitProgress("capturing");
+			return;
 		}
-	}
-	onProgress?.({ phase: "capturing", done: needCapture.length, total: needCapture.length });
+		if (options.shouldCancel?.()) {
+			completed++;
+			activeTabIds.delete(tab.id);
+			emitProgress("capturing");
+			return;
+		}
 
-	if (screenshots.size === 0) {
-		onProgress?.({ phase: "done", done: 0, total: 0 });
-		return;
-	}
-
-	// Phase 2: Send to server for AI summarization (server auto-caches)
-	onProgress?.({ phase: "summarizing", done: 0, total: screenshots.size });
-
-	const payload = [...screenshots.entries()]
-		.map(([tabId, image]) => {
-			const tab = tabs.find((t) => t.id === tabId);
-			if (!tab) return null; // tab closed during scan
-			return { tabId, image, title: tab.title, url: tab.url };
-		})
-		.filter((x): x is NonNullable<typeof x> => x !== null);
-
-	// Chunk to match server's .max(10) limit on the screenshots array
-	const BATCH_SIZE = 10;
-	for (let i = 0; i < payload.length; i += BATCH_SIZE) {
-		const batch = payload.slice(i, i + BATCH_SIZE);
 		try {
-			await serverApi.summarize(batch);
-			console.log(`[screenshot] Summarized and cached ${batch.length} tabs on server`);
-		} catch (e) {
-			console.warn("[screenshot] Summarization batch failed:", e);
+			const metadata = await extractTabContent(tab.id, false);
+			emitProgress("summarizing");
+			const result = await serverApi.summarize([
+				{
+					tabId: tab.id,
+					image,
+					title: tab.title,
+					url: tab.url,
+					metaDescription: metadata?.metaDescription || undefined,
+					ogDescription: metadata?.ogDescription || undefined,
+					keywords: metadata?.keywords || undefined,
+				},
+			]);
+			if (result.summaries.some((summary) => summary.tabId === tab.id && summary.summary)) {
+				summarized++;
+			}
+		} catch (error) {
+			console.warn(`[stage2] Summarization failed for tab ${tab.id}:`, error);
+		} finally {
+			completed++;
+			activeTabIds.delete(tab.id);
+			emitProgress("capturing");
 		}
-	}
+	});
 
-	onProgress?.({ phase: "done", done: screenshots.size, total: screenshots.size });
+	onProgress?.({ kind: "stage2", phase: "done", done: summarized, total: needCapture.length });
 }

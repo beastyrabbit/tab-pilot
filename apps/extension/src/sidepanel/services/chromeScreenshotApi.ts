@@ -1,4 +1,28 @@
+import { clientDebug } from "./clientDebug.js";
+
 const isChromeExtension = typeof chrome !== "undefined" && !!chrome.tabs;
+const DEBUGGER_TIMEOUT_MS = 10_000;
+const DEBUGGER_DETACH_TIMEOUT_MS = 3_000;
+
+async function withTimeout<T>(
+	promise: Promise<T>,
+	label: string,
+	timeoutMs = DEBUGGER_TIMEOUT_MS,
+): Promise<T> {
+	let timeoutId: ReturnType<typeof setTimeout> | undefined;
+	try {
+		return await Promise.race([
+			promise,
+			new Promise<T>((_, reject) => {
+				timeoutId = setTimeout(() => {
+					reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+				}, timeoutMs);
+			}),
+		]);
+	} finally {
+		if (timeoutId !== undefined) clearTimeout(timeoutId);
+	}
+}
 
 /**
  * Capture a full-page screenshot of a tab (up to maxHeight pixels)
@@ -11,11 +35,25 @@ export async function captureTabScreenshot(
 ): Promise<string | null> {
 	if (!isChromeExtension || !chrome.debugger) return null;
 
+	let attached = false;
+	let attachTimedOut = false;
+	const target = { tabId };
 	try {
-		await chrome.debugger.attach({ tabId }, "1.3");
+		clientDebug("stage2", "attaching Chrome debugger for screenshot", { tabId });
+		const attachPromise = chrome.debugger.attach(target, "1.3").then(async () => {
+			attached = true;
+			if (attachTimedOut) {
+				await chrome.debugger.detach(target).catch(() => {});
+				attached = false;
+			}
+		});
+		await withTimeout(attachPromise, `Debugger attach for tab ${tabId}`);
 
 		// Get page dimensions
-		const metrics = (await chrome.debugger.sendCommand({ tabId }, "Page.getLayoutMetrics")) as {
+		const metrics = (await withTimeout(
+			chrome.debugger.sendCommand(target, "Page.getLayoutMetrics"),
+			`Layout metrics for tab ${tabId}`,
+		)) as {
 			cssContentSize?: { width: number; height: number };
 			contentSize?: { width: number; height: number };
 		};
@@ -26,18 +64,43 @@ export async function captureTabScreenshot(
 
 		// Capture the current viewport without resizing — avoids visible layout reflow
 		// and the "DevTools is debugging" banner is shown for a shorter duration.
-		const result = (await chrome.debugger.sendCommand({ tabId }, "Page.captureScreenshot", {
-			format: "jpeg",
-			quality: 50,
-			clip: { x: 0, y: 0, width, height, scale: 1 },
-		})) as { data: string };
+		await withTimeout(
+			chrome.debugger.sendCommand(target, "Page.enable"),
+			`Page enable for tab ${tabId}`,
+		);
+		const result = (await withTimeout(
+			chrome.debugger.sendCommand(target, "Page.captureScreenshot", {
+				format: "jpeg",
+				quality: 50,
+				clip: { x: 0, y: 0, width, height, scale: 1 },
+			}),
+			`Screenshot capture for tab ${tabId}`,
+		)) as { data: string };
 
-		await chrome.debugger.detach({ tabId });
+		await withTimeout(
+			chrome.debugger.detach(target),
+			`Debugger detach for tab ${tabId}`,
+			DEBUGGER_DETACH_TIMEOUT_MS,
+		);
+		attached = false;
+		clientDebug("stage2", "detached Chrome debugger after screenshot", { tabId });
 
 		return result.data;
-	} catch {
+	} catch (error) {
+		console.warn(`[screenshot] Failed to capture tab ${tabId}:`, error);
+		clientDebug("stage2", "screenshot capture failed", {
+			tabId,
+			error: error instanceof Error ? error.message : String(error),
+		});
+		if (!attached) attachTimedOut = true;
 		try {
-			await chrome.debugger.detach({ tabId });
+			await withTimeout(
+				chrome.debugger.detach(target),
+				`Debugger detach after failure for tab ${tabId}`,
+				DEBUGGER_DETACH_TIMEOUT_MS,
+			);
+			attached = false;
+			clientDebug("stage2", "detached Chrome debugger after failure", { tabId });
 		} catch {}
 		return null;
 	}

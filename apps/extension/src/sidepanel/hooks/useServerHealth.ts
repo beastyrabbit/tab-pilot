@@ -20,8 +20,24 @@ export function useServerHealth() {
 
 	useEffect(() => {
 		check();
-		const interval = setInterval(check, 30_000);
+		const interval = setInterval(check, status === "online" ? 10_000 : 2_000);
 		return () => clearInterval(interval);
+	}, [check, status]);
+
+	useEffect(() => {
+		const onFocus = () => {
+			void check();
+		};
+		const onVisibilityChange = () => {
+			if (document.visibilityState === "visible") void check();
+		};
+
+		window.addEventListener("focus", onFocus);
+		document.addEventListener("visibilitychange", onVisibilityChange);
+		return () => {
+			window.removeEventListener("focus", onFocus);
+			document.removeEventListener("visibilitychange", onVisibilityChange);
+		};
 	}, [check]);
 
 	return { status, codexConnected, check };

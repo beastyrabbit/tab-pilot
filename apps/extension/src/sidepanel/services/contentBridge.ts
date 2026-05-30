@@ -1,6 +1,6 @@
 import { extractTabContent } from "./chromeContentApi.js";
 
-const BASE_URL = "http://localhost:7777/api";
+const BASE_URL = "http://127.0.0.1:7777/api";
 
 // Bridge token obtained from dedicated token endpoint (restricted to chrome-extension:// origins)
 let bridgeToken: string | null = null;
@@ -72,8 +72,7 @@ export function startContentBridge(): () => void {
 	});
 
 	es.onerror = () => {
-		// SSE will auto-reconnect on transient errors
-		console.warn("[content-bridge] SSE connection error (will retry)");
+		// EventSource auto-reconnects on transient server reloads and side panel pauses.
 	};
 
 	return () => {

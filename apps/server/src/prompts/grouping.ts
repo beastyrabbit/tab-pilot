@@ -19,9 +19,9 @@ Guidelines:
 	}
 
 	if (memories.length > 0) {
-		prompt += "\n\nLearned user preferences (MUST respect these):";
+		prompt += "\n\nLearned user preferences (MUST respect these, stable IDs included):";
 		for (const memory of memories) {
-			prompt += `\n- ${memory.observation}`;
+			prompt += `\n- [${memory.id}] ${memory.observation}`;
 		}
 	}
 

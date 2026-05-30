@@ -1,5 +1,6 @@
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
+import { nanoid } from "nanoid";
 import { z } from "zod";
 import { aiEditMemories } from "../services/codex.js";
 import { storage } from "../services/storage.js";
@@ -12,6 +13,23 @@ export const memoryRoute = new Hono();
 
 memoryRoute.get("/memory", (c) => {
 	return c.json(storage.getMemories());
+});
+
+const CreateMemorySchema = z.object({
+	observation: z.string().min(1).max(2000),
+});
+
+memoryRoute.post("/memory", zValidator("json", CreateMemorySchema), (c) => {
+	const { observation } = c.req.valid("json");
+	const memories = storage.getMemories();
+	const memory = {
+		id: nanoid(),
+		observation: observation.trim(),
+		createdAt: new Date().toISOString(),
+		source: "correction" as const,
+	};
+	storage.saveMemories([...memories, memory]);
+	return c.json(memory, 201);
 });
 
 memoryRoute.post("/memory/ai-edit", zValidator("json", AiEditSchema), async (c) => {

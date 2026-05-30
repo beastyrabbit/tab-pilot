@@ -1,4 +1,4 @@
-import type { TabGroupInfo, TabInfo } from "@tab-orga/shared";
+import type { StoredTabSet, TabGroupInfo, TabInfo } from "@tab-orga/shared";
 
 const isChromeExtension = typeof chrome !== "undefined" && !!chrome.tabs;
 
@@ -10,6 +10,15 @@ const toChromeTabIds = (tabIds: number[]): ChromeTabIds => {
 	}
 	return tabIds.length === 1 ? tabIds[0] : (tabIds as [number, ...number[]]);
 };
+
+function isRestorableUrl(url: string): boolean {
+	try {
+		const parsed = new URL(url);
+		return parsed.protocol === "http:" || parsed.protocol === "https:";
+	} catch {
+		return false;
+	}
+}
 
 export async function getAllTabs(): Promise<TabInfo[]> {
 	if (!isChromeExtension) return [];
@@ -65,10 +74,52 @@ export async function ungroupTabs(tabIds: number[]): Promise<void> {
 	await chrome.tabs.ungroup(toChromeTabIds(tabIds));
 }
 
+export async function closeTabs(tabIds: number[]): Promise<void> {
+	if (!isChromeExtension) return;
+	if (tabIds.length === 0) return;
+	await chrome.tabs.remove(tabIds);
+}
+
 export async function moveTabToGroup(tabId: number, groupId: number): Promise<void> {
 	if (!isChromeExtension) return;
 	const group = chrome.tabs.group as (options: chrome.tabs.GroupOptions) => Promise<number>;
 	await group({ tabIds: tabId, groupId });
+}
+
+export async function restoreStoredTabSet(set: StoredTabSet): Promise<void> {
+	if (!isChromeExtension || set.tabs.length === 0) return;
+	const currentWindow = await chrome.windows.getCurrent();
+	const windowId = currentWindow.id;
+	const createdTabIds: number[] = [];
+	const failedUrls: string[] = [];
+	for (const storedTab of [...set.tabs].sort((a, b) => a.order - b.order)) {
+		if (!isRestorableUrl(storedTab.originalUrl)) {
+			failedUrls.push(storedTab.originalUrl);
+			continue;
+		}
+		try {
+			const created = await chrome.tabs.create({
+				windowId,
+				url: storedTab.originalUrl,
+				active: false,
+			});
+			if (created.id !== undefined) createdTabIds.push(created.id);
+		} catch {
+			failedUrls.push(storedTab.originalUrl);
+		}
+	}
+	if (createdTabIds.length === 0) return;
+	const groupId = await groupTabs(createdTabIds);
+	await updateGroup(groupId, {
+		title: set.name,
+		color: set.color,
+		collapsed: false,
+	});
+	if (failedUrls.length > 0) {
+		throw new Error(
+			`Restored ${createdTabIds.length} tabs, skipped ${failedUrls.length} invalid URLs.`,
+		);
+	}
 }
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));

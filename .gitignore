@@ -18,6 +18,8 @@ apps/server/data/
 # Codex local config
 .codex/
 .ref/
+auth.json
+apps/server/auth.json
 *.swp
 *.swo
 
