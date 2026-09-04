@@ -903,8 +903,11 @@ export const storage = {
 		});
 	},
 
-	getStage1BlockedUrls(urls: string[]): string[] {
-		const availability = this.getSummaryAvailability(urls);
+	getStage1BlockedUrls(
+		urls: string[],
+		evidence: Array<{ url: string; title: string }> = [],
+	): string[] {
+		const availability = this.getSummaryAvailability(urls, evidence);
 		return urls.filter((url) => {
 			const state = availability[url];
 			return state?.stage === "none" && Boolean(state.stage1RetryAfter);

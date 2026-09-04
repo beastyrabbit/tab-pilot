@@ -77,7 +77,7 @@ export const summarizeRoute = new Hono();
 summarizeRoute.post("/summarize/check", zValidator("json", CacheCheckSchema), (c) => {
 	const { urls, minimumStage, evidence } = c.req.valid("json");
 	const cached = storage.getCachedUrls(urls, minimumStage || "any", evidence);
-	const stage1Blocked = storage.getStage1BlockedUrls(urls);
+	const stage1Blocked = storage.getStage1BlockedUrls(urls, evidence);
 	const availability = storage.getSummaryAvailability(urls);
 	console.log(`[summarize/check] ${cached.length}/${urls.length} URLs already cached`);
 	if (stage1Blocked.length > 0) {

@@ -31,5 +31,10 @@ describe("summary evidence cache", () => {
 		expect(
 			storage.getSummaryAvailability([url], [{ url, title: "New project title" }])[url]?.stage,
 		).toBe("none");
+
+		storage.markStage1Failures([{ url, reason: "New title could not be summarized" }]);
+		expect(storage.getStage1BlockedUrls([url], [{ url, title: "New project title" }])).toEqual([
+			url,
+		]);
 	});
 });
