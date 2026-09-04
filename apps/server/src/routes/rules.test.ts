@@ -8,12 +8,7 @@ vi.mock("../services/storage.js", () => ({
 		saveRules: (rules: unknown[]) => {
 			rulesStore = rules;
 		},
-		getSettings: () => ({
-			openaiApiKey: "",
-			model: "gpt-4o",
-			contentDepth: "meta",
-			port: 7777,
-		}),
+		getSettings: () => ({ generalPrompt: "", groupTitleLength: "medium" }),
 		getMemories: () => [],
 		saveMemories: () => {},
 	},

@@ -3,78 +3,111 @@ import type { OrganizeRequest, OrganizeRun } from "@tab-orga/shared";
 import { Hono } from "hono";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { analyzeCorrections, organizeWithAI, refineWithAI } from "../services/codex.js";
+import { organizeWithAI, refineWithAI } from "../services/codex.js";
 import {
 	ORGANIZE_DEBUG_LOG_FILE,
 	organizeDebugLog,
 	stamp,
 } from "../services/organize-debug-log.js";
-import { storage } from "../services/storage.js";
 
-const OrganizeRequestSchema = z.object({
-	tabs: z.array(
-		z.object({
-			id: z.number(),
-			windowId: z.number(),
-			url: z.string(),
-			title: z.string(),
-			favIconUrl: z.string().optional(),
-			groupId: z.number(),
-			metaDescription: z.string().optional(),
-			pageText: z.string().optional(),
-		}),
-	),
-	existingGroups: z.array(
-		z.object({
-			id: z.number(),
-			title: z.string().optional(),
-			color: z.enum(["grey", "blue", "red", "yellow", "green", "pink", "purple", "cyan", "orange"]),
-			collapsed: z.boolean(),
-			tabIds: z.array(z.number()),
-		}),
-	),
-	instruction: z.string().max(2000).optional(),
-	contentDepth: z.enum(["title-url", "meta", "full"]).optional(),
-});
+const OrganizeRequestSchema = z
+	.object({
+		tabs: z
+			.array(
+				z.object({
+					id: z.number(),
+					windowId: z.number(),
+					url: z.string().max(10_000),
+					title: z.string().max(2_000),
+					favIconUrl: z.string().optional(),
+					groupId: z.number(),
+					metaDescription: z.string().optional(),
+					pageText: z.string().max(100_000).optional(),
+				}),
+			)
+			.max(500),
+		existingGroups: z
+			.array(
+				z.object({
+					id: z.number(),
+					title: z.string().optional(),
+					color: z.enum([
+						"grey",
+						"blue",
+						"red",
+						"yellow",
+						"green",
+						"pink",
+						"purple",
+						"cyan",
+						"orange",
+					]),
+					collapsed: z.boolean(),
+					tabIds: z.array(z.number()).max(500),
+				}),
+			)
+			.max(200),
+		instruction: z.string().max(2000).optional(),
+	})
+	.strict();
 
-const GroupingSuggestionSchema = z.object({
-	groupName: z.string(),
-	color: z.enum(["grey", "blue", "red", "yellow", "green", "pink", "purple", "cyan", "orange"]),
-	tabIds: z.array(z.number()),
-	existingGroupId: z.preprocess((v) => (v === null ? undefined : v), z.number().optional()),
-	isNew: z.boolean(),
-	confidence: z.number(),
-});
+const GroupingSuggestionSchema = z
+	.object({
+		groupName: z.string().min(1).max(200),
+		color: z.enum(["grey", "blue", "red", "yellow", "green", "pink", "purple", "cyan", "orange"]),
+		tabIds: z.array(z.number()).max(500),
+		existingGroupId: z.preprocess((v) => (v === null ? undefined : v), z.number().optional()),
+		isNew: z.boolean(),
+		confidence: z.number().min(0).max(1),
+		basis: z.enum(["rule", "project", "topic", "site"]).optional(),
+		rationale: z.string().max(500).optional(),
+	})
+	.strict();
 
-const TabInfoSchema = z.object({
-	id: z.number(),
-	windowId: z.number(),
-	url: z.string(),
-	title: z.string(),
-	favIconUrl: z.string().optional(),
-	groupId: z.number(),
-	metaDescription: z.string().optional(),
-	pageText: z.string().optional(),
-});
+const TabInfoSchema = z
+	.object({
+		id: z.number(),
+		windowId: z.number(),
+		url: z.string().max(10_000),
+		title: z.string().max(2_000),
+		favIconUrl: z.string().optional(),
+		groupId: z.number(),
+		metaDescription: z.string().optional(),
+		pageText: z.string().max(100_000).optional(),
+	})
+	.strict();
 
 const RefineRequestSchema = z.object({
-	suggestions: z.array(GroupingSuggestionSchema),
-	tabs: z.array(TabInfoSchema),
-	feedback: z.string().min(1),
+	suggestions: z.array(GroupingSuggestionSchema).max(200),
+	tabs: z.array(TabInfoSchema).max(500),
+	feedback: z.string().min(1).max(2000),
 	targetGroupName: z.string().optional(),
 	targetTabId: z.number().optional(),
-});
-
-const LearnRequestSchema = z.object({
-	originalSuggestions: z.array(GroupingSuggestionSchema),
-	appliedSuggestions: z.array(GroupingSuggestionSchema),
-	tabs: z.array(TabInfoSchema),
 });
 
 export const organizeRoute = new Hono();
 
 const organizeRuns = new Map<string, OrganizeRun>();
 const activeOrganizeRunIdsByWindow = new Map<number, string>();
+const COMPLETED_RUN_TTL_MS = 30 * 60 * 1000;
+const MAX_RETAINED_RUNS = 100;
+
+function pruneOrganizeRuns(): void {
+	const now = Date.now();
+	for (const [id, run] of organizeRuns) {
+		if (run.status !== "running" && now - run.updatedAt > COMPLETED_RUN_TTL_MS) {
+			organizeRuns.delete(id);
+		}
+	}
+	if (organizeRuns.size <= MAX_RETAINED_RUNS) return;
+	const removable = [...organizeRuns.values()]
+		.filter((run) => run.status !== "running")
+		.sort((a, b) => a.updatedAt - b.updatedAt);
+	for (const run of removable) {
+		if (organizeRuns.size <= MAX_RETAINED_RUNS) break;
+		organizeRuns.delete(run.id);
+	}
+}
 
 function runWindowId(run: OrganizeRun): number {
 	return run.tabs[0]?.windowId ?? -1;
@@ -94,6 +127,7 @@ function firstActiveRun(): OrganizeRun | null {
 }
 
 function saveOrganizeRun(run: OrganizeRun): OrganizeRun {
+	pruneOrganizeRuns();
 	const next = { ...run, updatedAt: Date.now() };
 	const windowId = runWindowId(next);
 	organizeRuns.set(next.id, next);
@@ -155,6 +189,7 @@ function startOrganizeRun(request: OrganizeRequest): OrganizeRun {
 				suggestions: result.suggestions,
 				reasoning: result.reasoning,
 				storeSuggestions: result.storeSuggestions,
+				ungrouped: result.ungrouped,
 			});
 		} catch (error) {
 			organizeDebugLog(run.id, "run failed", {
@@ -187,6 +222,7 @@ organizeRoute.post("/organize/runs", zValidator("json", OrganizeRequestSchema), 
 });
 
 organizeRoute.get("/organize/runs/active", (c) => {
+	pruneOrganizeRuns();
 	const windowIdParam = c.req.query("windowId");
 	const windowId = windowIdParam === undefined ? undefined : Number(windowIdParam);
 	const run =
@@ -197,6 +233,7 @@ organizeRoute.get("/organize/runs/active", (c) => {
 });
 
 organizeRoute.get("/organize/runs/:id", (c) => {
+	pruneOrganizeRuns();
 	const run = organizeRuns.get(c.req.param("id")) || null;
 	return c.json({ run });
 });
@@ -233,27 +270,6 @@ organizeRoute.post("/organize/refine", zValidator("json", RefineRequestSchema), 
 	} catch (e) {
 		const message = e instanceof Error ? e.message : "Unknown error";
 		console.error(stamp(`[refine] Error: ${message}`));
-		return c.json({ error: message }, 500);
-	}
-});
-
-organizeRoute.post("/organize/learn", zValidator("json", LearnRequestSchema), async (c) => {
-	try {
-		const { originalSuggestions, appliedSuggestions, tabs } = c.req.valid("json");
-		const observations = await analyzeCorrections(originalSuggestions, appliedSuggestions, tabs);
-
-		const memories = storage.getMemories();
-		const newMemories = observations.map((observation) => ({
-			id: nanoid(),
-			observation,
-			createdAt: new Date().toISOString(),
-			source: "correction" as const,
-		}));
-
-		storage.saveMemories([...memories, ...newMemories]);
-		return c.json({ learned: newMemories.length });
-	} catch (e) {
-		const message = e instanceof Error ? e.message : "Unknown error";
 		return c.json({ error: message }, 500);
 	}
 });

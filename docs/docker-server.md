@@ -20,6 +20,7 @@ network_mode: host
 environment:
   TAB_ORGA_HOST: "127.0.0.1"
   TAB_ORGA_DATA_DIR: "/data"
+  TAB_ORGA_AUTH_FILE: "/app/apps/server/auth.json"
 ```
 
 With host networking there is no `ports:` mapping. The server itself binds to `127.0.0.1:7777`, so it
@@ -135,4 +136,3 @@ build:
   network: host
 network_mode: host
 ```
-

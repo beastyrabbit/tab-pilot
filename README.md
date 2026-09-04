@@ -40,19 +40,19 @@
 
 ## Features
 
-**Smart Grouping** — Click "Organize" and the AI analyzes your tabs by title, URL, metadata, cached summaries, and targeted full page content when needed, then suggests logical groups.
+**Smart Grouping** — Click "Organize" and the AI builds structured semantic profiles from titles, URLs, metadata, and optional screenshots, then groups by shared project or topic. Site-only groups are a fallback, and uncertain tabs stay ungrouped.
 
 **Preview Before Apply** — See proposed groups in a color-coded proposal view. Approve, dismiss, or refine with natural language feedback ("move YouTube to Entertainment", "keep GitHub separate").
 
-**Existing Group Awareness** — Respects your manually created groups. The AI extends them rather than creating duplicates.
+**Existing Group Awareness** — Treats manually created groups as a strong prior, extending coherent groups while still allowing clearly misplaced tabs to move.
 
-**Content Extraction** — Metadata and cached screenshot summaries are always available to the AI. Full page text is fetched on demand for ambiguous tabs.
+**Adaptive Evidence** — Fast metadata profiles are generated in batches. Targeted headings and cleaned main-page text, screenshots, or specialist delegates are used only when the lead model needs more evidence.
 
 **AI Memory** — Save reusable organization preferences as memories that influence future suggestions.
 
 **User Rules** — Define deterministic rules ("github.com → Development") that are applied before the AI runs.
 
-**Screenshot Summaries** — The background service worker scans missing tab summaries, caches them server-side, and shows red/yellow/green status dots in the tab list.
+**Semantic Profile Cache** — The background service worker caches structured tab profiles server-side, fingerprints them against current tab evidence, and shows their stage in the tab list.
 
 **Drag & Drop** — Manually move tabs between groups with drag-and-drop in the side panel.
 
@@ -64,17 +64,19 @@
 
 ```
 ┌─────────────────────────┐     ┌───────────────────────┐     ┌──────────────┐
-│   Chrome Extension      │     │   Local Server        │     │   Pi Agent   │
+│   Chrome Extension      │     │   Local Server        │     │ Pi + Codex   │
 │   (Side Panel UI)       │◄───►│   127.0.0.1:7777     │◄───►│ openai-codex │
 │                         │     │                       │     │              │
 │  React 19 + Vite        │     │  Hono + TypeScript    │     │  Tool calls  │
 │  TailwindCSS            │     │  SQLite + Drizzle     │     │  Summaries   │
 │  chrome.tabs/tabGroups  │     │  Memory & summaries   │     │              │
-│  @dnd-kit (drag & drop) │     │  Content bridge (SSE) │     │              │
+│  @dnd-kit (drag & drop) │     │  Content bridge (SSE) │     │ Sol + Terra  │
 └─────────────────────────┘     └───────────────────────┘     └──────────────┘
 ```
 
-**Why a local server?** Your API key stays on disk (never in the browser), AI orchestration is simpler server-side, and memories, rules, settings, and tab summaries persist in a local SQLite database. Swapping AI providers is a config change.
+**Why a local server?** Your Codex OAuth credential stays on disk (never in the browser), AI orchestration is simpler server-side, and memories, rules, settings, and tab profiles persist in a local SQLite database.
+
+The AI runtime is fixed in server code and exposed read-only at `GET /api/ai/runtime`: `gpt-5.6-sol` leads organization and refinement at high reasoning, while `gpt-5.6-terra` creates batched profiles at medium reasoning. The lead can conditionally delegate ambiguous subsets to Terra or Sol, with at most three delegate calls. The Settings panel reports these real roles and authentication state; it does not pretend to switch models.
 
 ### Monorepo Structure
 
@@ -88,8 +90,7 @@ tab-pilot/
 │   └── src/content/        # Content script (on-demand extraction)
 └── apps/server/            # Companion server (Hono on port 7777)
     ├── src/routes/         # API endpoints
-	    ├── src/services/       # Pi agent integration, storage, content bridge
-    └── src/prompts/        # AI prompt builders
+    └── src/services/       # Pi orchestration, storage, content bridge
 ```
 
 ---
@@ -168,7 +169,18 @@ policy, use `pnpm crx:install-external`.
 When changing extension code, run `pnpm build`, repack with the same PEM key, and bump
 `apps/extension/manifest.json` `version` when Chromium needs to pick up the update.
 
-Detailed local production docs:
+Complete documentation:
+
+- [Documentation index (Deutsch)](docs/index.md)
+- [Application and usage (Deutsch)](docs/anwendung.md)
+- [Architecture (Deutsch)](docs/architektur.md)
+- [AI and tab analysis (Deutsch)](docs/ai-und-tab-analyse.md)
+- [HTTP API (Deutsch)](docs/api.md)
+- [Data and security (Deutsch)](docs/daten-und-sicherheit.md)
+- [Development (Deutsch)](docs/entwicklung.md)
+- [Deployment (Deutsch)](docs/deployment.md)
+
+Additional operational guides:
 
 - [Local Production Setup](docs/local-production.md)
 - [Docker Server](docs/docker-server.md)
@@ -189,18 +201,16 @@ Detailed local production docs:
 
 ### Settings
 
-- **Model** — Choose which AI model to use
-- **General Behavior** — Custom instructions (e.g., "homelab is always a good group")
-- **Organization Thinking** — Reasoning level for organize and refine
-- **Summary Thinking** — Reasoning level for screenshot summaries
-- **Speed** — Economy, Standard, or Priority service tier
+- **AI Runtime** — Read-only, truthful status for the fixed lead, delegate, and profile models plus Codex authentication
+- **Organization Preferences** — Standing instructions (e.g., "homelab is always a good group")
+- **Group Title Length** — Short initials, one concise word, or a compact multi-word title
 - **Test Mode** — Preview without applying changes
 - **Ungroup all** — Remove all tab groups in the current Chrome window from the main toolbar
 
 ### Memory & Rules
 
 - **Memories** — View, edit, or clear what the AI has learned. Use "AI Edit" to bulk-manage memories with natural language.
-- **Rules** — Create deterministic rules (e.g., `github.com → Development`) that override the AI.
+- **Rules** — Deterministic rules (e.g., `github.com → Development`) override the AI. The server API supports full rule management; the existing editor is not currently linked from the shipped side panel.
 
 ---
 
@@ -232,10 +242,10 @@ pnpm lint:fix
 
 | Layer | Technology |
 |-------|-----------|
-| Extension UI | React 19, Vite, TailwindCSS 3, @dnd-kit |
+| Extension UI | React 19, Vite, TailwindCSS 4, @dnd-kit |
 | Extension APIs | chrome.tabs, chrome.tabGroups, chrome.scripting, chrome.debugger, chrome.alarms, chrome.storage |
 | Server | Hono, TypeScript, Zod validation, SQLite, Drizzle |
-| AI Backend | Pi Agent with openai-codex tool calls |
+| AI Backend | Pi Agent + OpenAI Codex Responses (`gpt-5.6-sol`, `gpt-5.6-terra`) |
 | Monorepo | pnpm workspaces |
 | Quality | Biome (lint + format), Vitest, Lefthook (git hooks) |
 

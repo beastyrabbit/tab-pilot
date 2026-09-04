@@ -2,20 +2,22 @@ import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { z } from "zod";
 import { summarizeMetadataTabs, summarizeScreenshots } from "../services/codex.js";
-import { storage } from "../services/storage.js";
+import { storage, summaryEvidenceFingerprint } from "../services/storage.js";
 
 const SummarizeRequestSchema = z.object({
 	screenshots: z
 		.array(
-			z.object({
-				tabId: z.number(),
-				image: z.string().max(5_000_000), // ~3.75 MB raw image
-				title: z.string(),
-				url: z.string(),
-				metaDescription: z.string().optional(),
-				ogDescription: z.string().optional(),
-				keywords: z.string().optional(),
-			}),
+			z
+				.object({
+					tabId: z.number(),
+					image: z.string().max(5_000_000), // ~3.75 MB raw image
+					title: z.string().max(2_000),
+					url: z.string().max(10_000),
+					metaDescription: z.string().max(10_000).optional(),
+					ogDescription: z.string().max(10_000).optional(),
+					keywords: z.string().max(10_000).optional(),
+				})
+				.strict(),
 		)
 		.max(10),
 });
@@ -23,6 +25,10 @@ const SummarizeRequestSchema = z.object({
 const CacheCheckSchema = z.object({
 	urls: z.array(z.string()).max(500),
 	minimumStage: z.enum(["any", "stage1", "stage2"]).optional(),
+	evidence: z
+		.array(z.object({ url: z.string().max(10_000), title: z.string().max(2_000) }).strict())
+		.max(500)
+		.optional(),
 });
 
 const SummaryLookupSchema = z.object({
@@ -32,14 +38,16 @@ const SummaryLookupSchema = z.object({
 const MetadataSummarizeRequestSchema = z.object({
 	tabs: z
 		.array(
-			z.object({
-				tabId: z.number(),
-				title: z.string(),
-				url: z.string(),
-				metaDescription: z.string().optional(),
-				ogDescription: z.string().optional(),
-				keywords: z.string().optional(),
-			}),
+			z
+				.object({
+					tabId: z.number(),
+					title: z.string().max(2_000),
+					url: z.string().max(10_000),
+					metaDescription: z.string().max(10_000).optional(),
+					ogDescription: z.string().max(10_000).optional(),
+					keywords: z.string().max(10_000).optional(),
+				})
+				.strict(),
 		)
 		.max(10),
 });
@@ -67,8 +75,8 @@ export const summarizeRoute = new Hono();
 
 /** Check which URLs already have cached summaries (skip re-scanning). */
 summarizeRoute.post("/summarize/check", zValidator("json", CacheCheckSchema), (c) => {
-	const { urls, minimumStage } = c.req.valid("json");
-	const cached = storage.getCachedUrls(urls, minimumStage || "any");
+	const { urls, minimumStage, evidence } = c.req.valid("json");
+	const cached = storage.getCachedUrls(urls, minimumStage || "any", evidence);
 	const stage1Blocked = storage.getStage1BlockedUrls(urls);
 	const availability = storage.getSummaryAvailability(urls);
 	console.log(`[summarize/check] ${cached.length}/${urls.length} URLs already cached`);
@@ -96,16 +104,26 @@ summarizeRoute.post(
 		try {
 			const { tabs } = c.req.valid("json");
 			console.log(`[summarize/stage1] Received ${tabs.length} tabs`);
-			const summaries = await summarizeMetadataTabs(tabs);
+			const result = await summarizeMetadataTabs(tabs);
 			storage.cacheStage1Summaries(
-				summaries
-					.map((summary) => {
-						const tab = tabs.find((item) => item.tabId === summary.tabId);
-						return { url: tab?.url || "", summary: summary.summary };
+				result.profiles
+					.map((profileResult) => {
+						const tab = tabs.find((item) => item.tabId === profileResult.tabId);
+						const { tabId: _tabId, ...profile } = profileResult;
+						return {
+							url: tab?.url || "",
+							summary: profile.summary,
+							profile,
+							fingerprint: tab ? summaryEvidenceFingerprint(tab.url, tab.title) : undefined,
+						};
 					})
-					.filter((summary) => summary.url && summary.summary),
+					.filter((entry) => entry.url && entry.summary),
 			);
-			return c.json({ summaries });
+			return c.json({
+				profiles: result.profiles,
+				summaries: result.profiles.map(({ tabId, summary }) => ({ tabId, summary })),
+				failures: result.failures,
+			});
 		} catch (e) {
 			const message = e instanceof Error ? e.message : "Unknown error";
 			console.error(`[summarize/stage1] Error: ${message}`);
@@ -127,20 +145,30 @@ summarizeRoute.post("/summarize", zValidator("json", SummarizeRequestSchema), as
 		const { screenshots } = c.req.valid("json");
 		console.log(`[summarize] Received ${screenshots.length} screenshots`);
 
-		const summaries = await summarizeScreenshots(screenshots);
+		const result = await summarizeScreenshots(screenshots);
 
 		// Auto-cache on server
 		storage.cacheStage2Summaries(
-			summaries
-				.map((s) => {
-					const shot = screenshots.find((sc) => sc.tabId === s.tabId);
-					return { url: shot?.url || "", summary: s.summary };
+			result.profiles
+				.map((profileResult) => {
+					const shot = screenshots.find((sc) => sc.tabId === profileResult.tabId);
+					const { tabId: _tabId, ...profile } = profileResult;
+					return {
+						url: shot?.url || "",
+						summary: profile.summary,
+						profile,
+						fingerprint: shot ? summaryEvidenceFingerprint(shot.url, shot.title) : undefined,
+					};
 				})
-				.filter((s) => s.url),
+				.filter((entry) => entry.url),
 		);
 
-		console.log(`[summarize] Produced and cached ${summaries.length} summaries`);
-		return c.json({ summaries });
+		console.log(`[summarize] Produced and cached ${result.profiles.length} profiles`);
+		return c.json({
+			profiles: result.profiles,
+			summaries: result.profiles.map(({ tabId, summary }) => ({ tabId, summary })),
+			failures: result.failures,
+		});
 	} catch (e) {
 		const message = e instanceof Error ? e.message : "Unknown error";
 		console.error(`[summarize] Error: ${message}`);
