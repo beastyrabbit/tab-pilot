@@ -52,4 +52,35 @@ describe("JsonCredentialStore", () => {
 		await store.delete("openai-codex");
 		expect(await store.read("openai-codex")).toBeUndefined();
 	});
+
+	it("serializes whole-file updates across store instances", async () => {
+		const { path, store: firstStore } = await testStore();
+		const secondStore = new JsonCredentialStore(path);
+		let releaseFirst: (() => void) | undefined;
+		const holdFirst = new Promise<void>((resolve) => {
+			releaseFirst = resolve;
+		});
+		let firstStarted: (() => void) | undefined;
+		const firstIsRunning = new Promise<void>((resolve) => {
+			firstStarted = resolve;
+		});
+
+		const firstWrite = firstStore.modify("provider-one", async () => {
+			firstStarted?.();
+			await holdFirst;
+			return { type: "api_key", key: "first" };
+		});
+		await firstIsRunning;
+		const secondWrite = secondStore.modify("provider-two", async () => ({
+			type: "api_key",
+			key: "second",
+		}));
+		releaseFirst?.();
+		await Promise.all([firstWrite, secondWrite]);
+
+		expect(await firstStore.list()).toEqual([
+			{ providerId: "provider-one", type: "api_key" },
+			{ providerId: "provider-two", type: "api_key" },
+		]);
+	});
 });

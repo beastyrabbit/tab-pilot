@@ -1,6 +1,7 @@
 import { chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import type { Credential, CredentialInfo, CredentialStore } from "@earendil-works/pi-ai";
+import lockfile from "proper-lockfile";
 
 const AUTH_FILE_CANDIDATES = [
 	...(process.env.TAB_ORGA_AUTH_FILE ? [resolve(process.env.TAB_ORGA_AUTH_FILE)] : []),
@@ -58,28 +59,22 @@ async function writeCredentials(
 }
 
 export class JsonCredentialStore implements CredentialStore {
-	private readonly queues = new Map<string, Promise<void>>();
-
 	constructor(private readonly configuredPath?: string) {}
 
 	private async path(): Promise<string> {
 		return this.configuredPath ?? (await authPath());
 	}
 
-	private async serialized<T>(providerId: string, operation: () => Promise<T>): Promise<T> {
-		const previous = this.queues.get(providerId) ?? Promise.resolve();
-		let release: (() => void) | undefined;
-		const gate = new Promise<void>((resolveGate) => {
-			release = resolveGate;
+	private async serialized<T>(path: string, operation: () => Promise<T>): Promise<T> {
+		await mkdir(dirname(path), { recursive: true });
+		const release = await lockfile.lock(path, {
+			realpath: false,
+			retries: { retries: 100, minTimeout: 10, maxTimeout: 100 },
 		});
-		const tail = previous.catch(() => {}).then(() => gate);
-		this.queues.set(providerId, tail);
-		await previous.catch(() => {});
 		try {
 			return await operation();
 		} finally {
-			release?.();
-			if (this.queues.get(providerId) === tail) this.queues.delete(providerId);
+			await release();
 		}
 	}
 
@@ -101,8 +96,8 @@ export class JsonCredentialStore implements CredentialStore {
 		providerId: string,
 		fn: (current: Credential | undefined) => Promise<Credential | undefined>,
 	): Promise<Credential | undefined> {
-		return await this.serialized(providerId, async () => {
-			const path = await this.path();
+		const path = await this.path();
+		return await this.serialized(path, async () => {
 			const credentials = await readCredentials(path);
 			const next = await fn(credentials[providerId]);
 			if (next === undefined) return credentials[providerId];
@@ -113,8 +108,8 @@ export class JsonCredentialStore implements CredentialStore {
 	}
 
 	async delete(providerId: string): Promise<void> {
-		await this.serialized(providerId, async () => {
-			const path = await this.path();
+		const path = await this.path();
+		await this.serialized(path, async () => {
 			const credentials = await readCredentials(path);
 			if (!(providerId in credentials)) return;
 			delete credentials[providerId];
