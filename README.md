@@ -130,7 +130,8 @@ docker compose logs -f tab-pilot-server
 ```
 
 The server uses Docker host networking and binds to `127.0.0.1:7777` on the host. Runtime data is stored in
-`apps/server/data`. Pi auth is mounted from `apps/server/auth.json`, so it survives image
+`apps/server/data`. Pi auth is mounted from `apps/server/credentials/`, so credential updates and
+their lock share one writable filesystem and survive image
 rebuilds. Verify with:
 
 ```bash

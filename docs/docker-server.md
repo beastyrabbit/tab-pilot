@@ -20,7 +20,7 @@ network_mode: host
 environment:
   TAB_ORGA_HOST: "127.0.0.1"
   TAB_ORGA_DATA_DIR: "/data"
-  TAB_ORGA_AUTH_FILE: "/app/apps/server/auth.json"
+  TAB_ORGA_AUTH_FILE: "/credentials/auth.json"
 ```
 
 With host networking there is no `ports:` mapping. The server itself binds to `127.0.0.1:7777`, so it
@@ -79,11 +79,13 @@ Compose mounts:
 
 ```yaml
 volumes:
-  - ./apps/server/auth.json:/app/apps/server/auth.json:rw
+  - ./apps/server/credentials:/credentials:rw
   - ./apps/server/data:/data:rw
 ```
 
-`apps/server/auth.json` contains Pi Codex credentials created by `pnpm pi:login`. `apps/server/data`
+`apps/server/credentials/auth.json` contains Pi Codex credentials created by `pnpm pi:login`.
+Mounting its directory keeps atomic replacement and the cross-process lock on the shared bind
+mount. `apps/server/data`
 contains the SQLite database and related runtime data. Both survive image rebuilds.
 
 ## Production Build Smoke Check

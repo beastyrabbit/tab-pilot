@@ -4,7 +4,7 @@ This is the recommended local production shape for Tab Pilot:
 
 - Backend: Docker Compose service running the server on `127.0.0.1:7777`
 - Frontend: packed local CRX installed into Chromium by managed policy
-- Persistence: bind-mounted `apps/server/auth.json` and `apps/server/data`
+- Persistence: bind-mounted `apps/server/credentials` and `apps/server/data`
 
 ## First-Time Setup
 
@@ -12,6 +12,11 @@ Run from the repository root:
 
 ```bash
 pnpm install --frozen-lockfile
+# One-time migration from checkouts that used the old single-file bind mount:
+mkdir -p apps/server/credentials
+if [ -f apps/server/auth.json ] && [ ! -e apps/server/credentials/auth.json ]; then
+  mv apps/server/auth.json apps/server/credentials/auth.json
+fi
 pnpm pi:login
 pnpm build
 docker compose up -d --build
@@ -111,4 +116,3 @@ Chromium.
 - `apps/extension/.local/tab-pilot.crx` - packed extension, ignored by git
 - `apps/extension/.local/chromium-managed-policy.json` - generated managed policy, ignored by git
 - `apps/extension/.local/updates.xml` - generated local update manifest, ignored by git
-

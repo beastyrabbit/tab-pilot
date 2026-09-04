@@ -5,6 +5,9 @@ import lockfile from "proper-lockfile";
 
 const AUTH_FILE_CANDIDATES = [
 	...(process.env.TAB_ORGA_AUTH_FILE ? [resolve(process.env.TAB_ORGA_AUTH_FILE)] : []),
+	resolve(process.cwd(), "credentials/auth.json"),
+	resolve(process.cwd(), "apps/server/credentials/auth.json"),
+	resolve(import.meta.dirname, "../../credentials/auth.json"),
 	resolve(process.cwd(), "auth.json"),
 	resolve(process.cwd(), "apps/server/auth.json"),
 	resolve(import.meta.dirname, "../../auth.json"),

@@ -5,13 +5,14 @@
 Der lokale Server verwendet standardmäßig:
 
 ```text
-apps/server/data/tab-orga.sqlite   Anwendungsdaten
-apps/server/auth.json              Codex-OAuth-Zugangsdaten
+apps/server/data/tab-orga.sqlite        Anwendungsdaten
+apps/server/credentials/auth.json       Codex-OAuth-Zugangsdaten
 ```
 
 `TAB_ORGA_DATA_DIR` und `TAB_ORGA_AUTH_FILE` können diese Pfade ändern. Docker Compose bindet das
-Datenverzeichnis nach `/data` und die Auth-Datei separat in den Container ein. Image-Neubauten
-löschen deshalb weder Anwendungsdaten noch OAuth-Anmeldung.
+Datenverzeichnis nach `/data` und das Credential-Verzeichnis nach `/credentials` in den Container
+ein. Dadurch liegen die atomar ersetzte Auth-Datei und ihr Prozess-Lock auf demselben Dateisystem.
+Image-Neubauten löschen deshalb weder Anwendungsdaten noch OAuth-Anmeldung.
 
 ## SQLite-Daten
 
@@ -115,7 +116,7 @@ Für eine vollständige lokale Sicherung werden benötigt:
 
 ```text
 apps/server/data/
-apps/server/auth.json
+apps/server/credentials/auth.json
 apps/extension/.local/tab-pilot.pem
 ```
 
@@ -135,4 +136,3 @@ behandelt. Auth-Datei und PEM-Schlüssel müssen besonders geschützt werden.
 Zur Wiederherstellung den Server stoppen, das Datenverzeichnis und gegebenenfalls die Auth-Datei
 zurückkopieren und den Server wieder starten. Niemals eine fremde oder nicht vertrauenswürdige
 SQLite- oder Auth-Datei übernehmen.
-

@@ -13,7 +13,7 @@ Diese Anleitung beschreibt das vollständige Deployment von Tab Pilot auf dem lo
 - pnpm ab Version 11
 - Docker mit Compose
 - Chromium
-- Ein bestehender Codex-Login in `apps/server/auth.json`
+- Ein bestehender Codex-Login in `apps/server/credentials/auth.json`
 - Der bestehende private CRX-Schlüssel in `apps/extension/.local/tab-pilot.pem`
 
 Den PEM-Schlüssel niemals ersetzen oder löschen. Ein neuer Schlüssel erzeugt eine neue Extension-ID
@@ -23,6 +23,15 @@ Falls noch kein Codex-Login vorhanden ist:
 
 ```bash
 pnpm pi:login
+```
+
+Bestehende Checkouts migrieren die frühere Einzeldatei einmalig vor dem Start:
+
+```bash
+mkdir -p apps/server/credentials
+if [ -f apps/server/auth.json ] && [ ! -e apps/server/credentials/auth.json ]; then
+  mv apps/server/auth.json apps/server/credentials/auth.json
+fi
 ```
 
 ## Vollständiges Deployment
@@ -183,8 +192,8 @@ Der Docker-Server muss dafür nicht neu gebaut werden.
 Docker Compose bindet diese Pfade ein:
 
 ```text
-apps/server/auth.json -> /app/apps/server/auth.json
-apps/server/data      -> /data
+apps/server/credentials -> /credentials
+apps/server/data        -> /data
 ```
 
 Dadurch bleiben Codex OAuth-Zugangsdaten, Einstellungen, Regeln, Memories und gecachte
