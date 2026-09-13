@@ -2,6 +2,11 @@
   <img src="apps/extension/public/icons/icon128.png" alt="Tab Pilot" width="80" />
 </p>
 
+
+## At a glance
+
+A Chrome extension that groups browser tabs around the task you are doing.
+
 <h1 align="center">Tab Pilot</h1>
 
 <p align="center">
