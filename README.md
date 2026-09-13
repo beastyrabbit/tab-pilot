@@ -37,7 +37,7 @@ A Chrome extension that groups browser tabs around the task you are doing.
 
 | Organize | Proposal View | Settings |
 |:---:|:---:|:---:|
-| ![PLACEHOLDER](https://placehold.co/300x500/1a1a2e/e0e0e0?text=Side+Panel) | ![PLACEHOLDER](https://placehold.co/300x500/1a1a2e/e0e0e0?text=Proposals) | ![PLACEHOLDER](https://placehold.co/300x500/1a1a2e/e0e0e0?text=Settings) |
+Screenshots of the extension UI will be added here as the current build stabilizes.
 
 > *Replace the placeholders above with real screenshots — open the side panel, take a screenshot, and save to `docs/` folder.*
 
