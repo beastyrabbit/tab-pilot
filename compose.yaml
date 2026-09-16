@@ -8,7 +8,8 @@ services:
     environment:
       TAB_ORGA_HOST: "127.0.0.1"
       TAB_ORGA_DATA_DIR: "/data"
+      TAB_ORGA_AUTH_FILE: "/credentials/auth.json"
     volumes:
-      - ./apps/server/auth.json:/app/apps/server/auth.json:rw
+      - ./apps/server/credentials:/credentials:rw
       - ./apps/server/data:/data:rw
     restart: unless-stopped

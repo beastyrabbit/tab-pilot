@@ -1,14 +1,12 @@
 import type { GroupColor, TabGroupInfo, TabInfo } from "./tab.js";
 
-export type ContentDepth = "title-url" | "meta" | "full";
-
 export interface OrganizeRequest {
 	tabs: TabInfo[];
 	existingGroups: TabGroupInfo[];
 	instruction?: string;
-	/** @deprecated Content depth is ignored. Metadata and cached summaries are always used. */
-	contentDepth?: ContentDepth;
 }
+
+export type GroupingBasis = "rule" | "project" | "topic" | "site";
 
 export interface GroupingSuggestion {
 	groupName: string;
@@ -17,6 +15,13 @@ export interface GroupingSuggestion {
 	existingGroupId?: number;
 	isNew: boolean;
 	confidence: number;
+	basis?: GroupingBasis;
+	rationale?: string;
+}
+
+export interface UngroupedTabReason {
+	tabId: number;
+	reason: string;
 }
 
 export interface StoredTabSetSuggestion {
@@ -31,6 +36,7 @@ export interface OrganizeResponse {
 	suggestions: GroupingSuggestion[];
 	reasoning: string;
 	storeSuggestions: StoredTabSetSuggestion[];
+	ungrouped?: UngroupedTabReason[];
 }
 
 export type OrganizeRunPhase =
@@ -56,6 +62,7 @@ export interface OrganizeRun {
 	suggestions?: GroupingSuggestion[];
 	reasoning?: string;
 	storeSuggestions?: StoredTabSetSuggestion[];
+	ungrouped?: UngroupedTabReason[];
 	error?: string;
 }
 
@@ -65,12 +72,6 @@ export interface StartOrganizeRunResponse {
 
 export interface GetOrganizeRunResponse {
 	run: OrganizeRun | null;
-}
-
-export interface LearnRequest {
-	originalSuggestions: GroupingSuggestion[];
-	appliedSuggestions: GroupingSuggestion[];
-	tabs: TabInfo[];
 }
 
 export interface HealthResponse {
@@ -95,6 +96,7 @@ export interface RefineRequest {
 export interface RefineResponse {
 	suggestions: GroupingSuggestion[];
 	reasoning: string;
+	ungrouped?: UngroupedTabReason[];
 	memoryCandidates: MemoryCandidate[];
 	/** @deprecated Use memoryCandidates. */
 	memories?: string[];
@@ -122,14 +124,34 @@ export interface AIEditMemoriesResponse {
 	summary: string;
 }
 
-export interface ModelsResponse {
-	models: ModelInfo[];
-	current: string;
+export interface AIRuntimeResponse {
+	provider: "openai-codex";
+	authenticated: boolean;
+	roles: {
+		lead: { modelId: "gpt-5.6-sol"; name: string; reasoning: "high" };
+		delegates: {
+			modelIds: ["gpt-5.6-terra", "gpt-5.6-sol"];
+			reasoning: "high";
+			policy: "conditional";
+			maxConcurrent: 3;
+		};
+		summaries: { modelId: "gpt-5.6-terra"; name: string; reasoning: "medium" };
+	};
+	transport: "auto";
+	serviceTier: "default";
 }
 
-export interface ModelInfo {
-	id: string;
-	name: string;
+export interface TabSemanticProfile {
+	summary: string;
+	subjects: string[];
+	activity: string;
+	namedEntities: string[];
+	confidence: number;
+	needsMoreEvidence: boolean;
+}
+
+export interface TabSemanticProfileResult extends TabSemanticProfile {
+	tabId: number;
 }
 
 export interface TabSummarySnapshot {
