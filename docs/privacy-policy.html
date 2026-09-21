@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="description" content="Privacy policy for the Tab Organizer Chrome extension.">
+  <title>Tab Organizer privacy policy</title>
+  <style>
+    :root { color-scheme: light; font-family: system-ui, sans-serif; color: #202124; background: #fff; }
+    body { max-width: 48rem; margin: 3rem auto; padding: 0 1.25rem 3rem; line-height: 1.65; }
+    h1 { font-size: clamp(1.8rem, 5vw, 2.4rem); line-height: 1.2; }
+    h2 { margin-top: 2rem; font-size: 1.2rem; line-height: 1.35; }
+    a { color: #185abc; text-underline-offset: .15em; overflow-wrap: anywhere; }
+    li + li { margin-top: .5rem; }
+    code { font-size: .92em; overflow-wrap: anywhere; }
+    .date { color: #5f6368; }
+    .notice { padding: 1rem 1.1rem; background: #f1f3f4; border-radius: .5rem; }
+    @media (max-width: 40rem) { body { margin-top: 1.5rem; } }
+    @media print { body { max-width: none; margin: 0; } a { color: inherit; } }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Tab Organizer privacy policy</h1>
+  <p class="date">Last updated: 21 September 2026 · Extension version 0.3.1</p>
+
+  <p>Tab Organizer is a Chrome extension that helps users organize open browser tabs into topic-based groups. It has no Tab Organizer account, advertising, subscription, or sale of data.</p>
+
+  <h2>Operator and contact</h2>
+  <p><strong>Public pseudonym: beastyrabbit</strong></p>
+  <p>For support and privacy questions, use the <a href="https://github.com/beastyrabbit/tab-pilot/issues">Tab Organizer issue tracker</a>. Do not post passwords, client keys, complete page contents, or other confidential information there.</p>
+
+  <h2>Information the extension handles</h2>
+  <ul>
+    <li><strong>Tabs and tab groups:</strong> tab titles, URLs, domains, window and tab identifiers, group membership, group names, group colors, and references to website icons. These are needed to display tabs and propose organization.</li>
+    <li><strong>Selected page information:</strong> during a user-requested organization, the extension may read page metadata or a text excerpt from selected HTTP or HTTPS pages when a title and URL are not enough to classify a tab.</li>
+    <li><strong>User settings:</strong> organization instructions, protected groups, memories, model settings, proxy settings, and saved tab sets.</li>
+    <li><strong>Local results:</strong> proposals, summaries, caches, and recent run history.</li>
+    <li><strong>Proxy credentials:</strong> the proxy address and an optional proxy client key if the user enters them in Settings.</li>
+  </ul>
+  <p>Tab titles, URLs, instructions, and page excerpts can contain personal or confidential information. The extension does not automatically redact that information.</p>
+
+  <h2>How information is used</h2>
+  <p>The extension uses this information to display tabs, create grouping proposals, show summaries, apply changes the user confirms, verify the result, and provide its local interface. It does not use tab information for advertising, profiling, credit decisions, or sale.</p>
+
+  <h2>User-configured AI proxy</h2>
+  <p>For AI features, Tab Organizer sends the information needed for the requested operation to the EasyCLIProxyAPI address entered by the user. This can include tab titles, URLs, group data, user instructions, and selected page metadata or text. The proxy can forward the request to the AI provider configured there.</p>
+  <p>beastyrabbit does not operate a Tab Organizer server that receives tab data. The selected proxy and AI provider process requests under their own terms and privacy policies. Their retention, deletion, security, and processing locations are their responsibility.</p>
+  <p>Connection checks and model discovery can contact the configured proxy outside an organization run. These checks do not need to include tab contents.</p>
+  <p class="notice">Tab Organizer does not read Codex CLI <code>auth.json</code> files and does not include an OpenAI API key. The user configures and authenticates the separate proxy.</p>
+
+  <h2>Website icons and external requests</h2>
+  <p>To help users recognize tabs, the extension loads website icons from the website or its icon host. If an icon is unavailable, it may request an icon from Google's favicon service using the tab's domain name. The requested domain, IP address, and ordinary technical connection data may be sent to Google. Google's <a href="https://policies.google.com/privacy">privacy policy</a> applies to that service. This request can happen while tabs are displayed, without starting an AI operation.</p>
+
+  <h2>Storage on the device</h2>
+  <p>The extension stores settings and local records in <code>chrome.storage.local</code> in the user's Chrome profile. It does not use Chrome Sync for these records. Stored information can include proxy settings, the optional client key, rules, memories, protected groups, saved tab sets, summaries, and recent runs.</p>
+  <p>The user can clear recent runs in Settings, clear the extension's Chrome storage, or uninstall the extension. Removing local data does not delete information already sent to the configured proxy, AI provider, or icon service; those services control their own retention.</p>
+
+  <h2>Security</h2>
+  <p>HTTPS protects communication with an HTTPS proxy. If the user configures an HTTP proxy, the connection does not have HTTPS transport protection. The optional proxy client key is stored locally and sent to the configured proxy as an authorization header. Chrome local storage is not a separate password vault.</p>
+
+  <h2>Legal basis and rights</h2>
+  <p>This is a private, non-commercial hobby project. Processing takes place to provide functions the user requests. Where data protection law applies, the user may have rights of access, correction, deletion, restriction, objection, and portability depending on the circumstances. Requests about data held by the configured proxy or AI provider must be directed to those services.</p>
+  <p>Privacy questions can be raised through the <a href="https://github.com/beastyrabbit/tab-pilot/issues">public issue tracker</a>. A complaint may also be submitted to a competent data protection authority.</p>
+
+  <h2>Changes to this policy</h2>
+  <p>This policy may change when the extension or its processing changes. The date above identifies the current version.</p>
+</main>
+</body>
+</html>
