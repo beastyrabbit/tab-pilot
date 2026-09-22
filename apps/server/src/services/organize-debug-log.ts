@@ -12,12 +12,11 @@ export function stamp(message: string): string {
 }
 
 export function organizeDebugLog(runId: string, message: string, data?: unknown): void {
+	if (process.env.TAB_ORGA_DEBUG !== "1") return;
 	const suffix = data === undefined ? "" : ` ${JSON.stringify(data)}`;
 	const line = stamp(`[organize:${runId}] ${message}${suffix}`);
 	try {
 		appendFileSync(ORGANIZE_DEBUG_LOG_FILE, `${line}\n`);
 	} catch {}
-	if (process.env.TAB_ORGA_DEBUG === "1") {
-		console.log(line);
-	}
+	console.log(line);
 }

@@ -8,22 +8,25 @@
     "build": "tsup --config tsup.config.ts",
     "start": "node dist/index.js",
     "smoke:prod": "node scripts/smoke-start.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "pi:login": "mkdir -p credentials && cd credentials && ../node_modules/.bin/pi-ai login openai-codex"
   },
   "dependencies": {
-    "@earendil-works/pi-agent-core": "0.78.0",
-    "@earendil-works/pi-ai": "0.78.0",
-    "@hono/node-server": "^2.0.4",
-    "@hono/zod-validator": "^0.8.0",
+    "@earendil-works/pi-agent-core": "0.80.8",
+    "@earendil-works/pi-ai": "0.80.8",
+    "@hono/node-server": "^2.0.9",
+    "@hono/zod-validator": "^0.9.0",
     "@tab-orga/shared": "workspace:*",
     "@toon-format/toon": "^2.3.0",
     "drizzle-orm": "1.0.0-beta.16-c2458b2",
-    "hono": "^4.12.23",
+    "hono": "^4.12.30",
     "nanoid": "^5.1.11",
+    "proper-lockfile": "^4.1.2",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^22.19.19",
+    "@types/proper-lockfile": "^4.1.4",
     "tsup": "^8.5.1",
     "tsx": "^4.22.3",
     "typescript": "^6.0.3",

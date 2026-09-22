@@ -296,6 +296,7 @@ export function App() {
 		scanProgress,
 		memoryCandidates,
 		storeSuggestions,
+		ungrouped,
 		organizeMessage,
 		organize,
 		refine,
@@ -491,6 +492,7 @@ export function App() {
 					testMode={testMode}
 					memoryCandidates={memoryCandidates}
 					storeSuggestions={storeSuggestions}
+					ungrouped={ungrouped}
 					onRefine={handleRefine}
 					onApply={handleApply}
 					onSaveMemoryCandidate={async (observation) => {
