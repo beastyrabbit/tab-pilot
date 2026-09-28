@@ -4,6 +4,7 @@ import type {
 	StoredTabSetSuggestion,
 	TabGroupInfo,
 	TabInfo,
+	UngroupedTabReason,
 } from "@tab-orga/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { collapseAndReorderGroups, groupTabs, updateGroup } from "../services/chromeTabsApi.js";
@@ -34,6 +35,7 @@ export function useOrganize() {
 	const [scanProgress, setScanProgress] = useState<ScanProgress | null>(null);
 	const [memoryCandidates, setMemoryCandidates] = useState<MemoryCandidate[]>([]);
 	const [storeSuggestions, setStoreSuggestions] = useState<StoredTabSetSuggestion[]>([]);
+	const [ungrouped, setUngrouped] = useState<UngroupedTabReason[]>([]);
 	const [organizeMessage, setOrganizeMessage] = useState("");
 	const [organizePhase, setOrganizePhase] = useState<OrganizeRunPhase | null>(null);
 	const [activeRunId, setActiveRunId] = useState<string | null>(null);
@@ -61,6 +63,7 @@ export function useOrganize() {
 			setReasoning("");
 			setMemoryCandidates([]);
 			setStoreSuggestions([]);
+			setUngrouped([]);
 			setError(null);
 			return;
 		}
@@ -70,6 +73,7 @@ export function useOrganize() {
 			setReasoning(run.reasoning || "");
 			setMemoryCandidates([]);
 			setStoreSuggestions(run.storeSuggestions || []);
+			setUngrouped(run.ungrouped || []);
 			setError(null);
 			return;
 		}
@@ -79,6 +83,7 @@ export function useOrganize() {
 			setReasoning("");
 			setMemoryCandidates([]);
 			setStoreSuggestions([]);
+			setUngrouped([]);
 			setError(run.error || "Failed to organize");
 		}
 	}, []);
@@ -202,6 +207,7 @@ export function useOrganize() {
 			setReasoning("");
 			setMemoryCandidates([]);
 			setStoreSuggestions([]);
+			setUngrouped([]);
 			setOrganizeMessage("Queued organize run");
 			setOrganizePhase("queued");
 			clientDebug("organize", "button clicked", {
@@ -228,7 +234,6 @@ export function useOrganize() {
 					tabs,
 					existingGroups: groups,
 					instruction: instruction.trim() || undefined,
-					contentDepth: "meta",
 				});
 				clientDebug("organize", "server organize run started", { runId: result.run.id });
 				await saveStoredOrganizeRun(result.run);
@@ -265,6 +270,7 @@ export function useOrganize() {
 				setReasoning(result.reasoning);
 				setMemoryCandidates(result.memoryCandidates || []);
 				setStoreSuggestions(result.storeSuggestions || []);
+				setUngrouped(result.ungrouped || []);
 			} catch (e) {
 				setError(e instanceof Error ? e.message : "Failed to refine");
 			} finally {
@@ -328,6 +334,7 @@ export function useOrganize() {
 				setReasoning("");
 				setMemoryCandidates([]);
 				setStoreSuggestions([]);
+				setUngrouped([]);
 				setLoading(false);
 				setOrganizeMessage("");
 				setOrganizePhase(null);
@@ -345,6 +352,7 @@ export function useOrganize() {
 		setReasoning("");
 		setMemoryCandidates([]);
 		setStoreSuggestions([]);
+		setUngrouped([]);
 		setLoading(false);
 		setOrganizeMessage("");
 		setOrganizePhase(null);
@@ -362,6 +370,7 @@ export function useOrganize() {
 		scanProgress,
 		memoryCandidates,
 		storeSuggestions,
+		ungrouped,
 		organizeMessage,
 		organizePhase,
 		organize,

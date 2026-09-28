@@ -100,6 +100,7 @@ export async function getTabsNeedingStage1(tabs: TabInfo[]): Promise<TabInfo[]> 
 		const state = await serverApi.checkSummaryState(
 			httpTabs.map((t) => t.url),
 			"stage1",
+			httpTabs.map((tab) => ({ url: tab.url, title: tab.title })),
 		);
 		return httpTabs.filter((t) => !state.cached.has(t.url) && !state.stage1Blocked.has(t.url));
 	} catch {
@@ -115,6 +116,7 @@ export async function getTabsNeedingStage2(tabs: TabInfo[]): Promise<TabInfo[]> 
 		const cachedUrls = await serverApi.checkCachedUrls(
 			httpTabs.map((t) => t.url),
 			"stage2",
+			httpTabs.map((tab) => ({ url: tab.url, title: tab.title })),
 		);
 		return httpTabs.filter((t) => !cachedUrls.has(t.url));
 	} catch {
@@ -178,9 +180,19 @@ export async function runStage1SummaryScan(
 
 	const activeTabIds = new Set<number>();
 	let completed = 0;
-	let summarized = 0;
 	const getConcurrency = () =>
 		clampConcurrency(options.getConcurrency?.() ?? options.concurrency ?? 4, needSummary.length);
+	const inputs = new Map<
+		number,
+		{
+			tabId: number;
+			title: string;
+			url: string;
+			metaDescription?: string;
+			ogDescription?: string;
+			keywords?: string;
+		}
+	>();
 
 	const emitProgress = (phase: ScanProgress["phase"]) => {
 		onProgress?.({
@@ -198,43 +210,52 @@ export async function runStage1SummaryScan(
 		emitProgress("metadata");
 		try {
 			const metadata = await extractTabContent(tab.id, false);
-			emitProgress("summarizing");
-			const result = await serverApi.summarizeStage1([
-				{
-					tabId: tab.id,
-					title: tab.title,
-					url: tab.url,
-					metaDescription: metadata?.metaDescription || undefined,
-					ogDescription: metadata?.ogDescription || undefined,
-					keywords: metadata?.keywords || undefined,
-				},
-			]);
-			if (result.summaries.some((summary) => summary.tabId === tab.id && summary.summary)) {
-				summarized++;
-			} else {
-				await serverApi.markStage1Failures([
-					{
-						url: tab.url,
-						reason: metadata ? "Stage 1 returned no summary" : "Metadata unavailable",
-					},
-				]);
-			}
+			inputs.set(tab.id, {
+				tabId: tab.id,
+				title: tab.title,
+				url: tab.url,
+				metaDescription: metadata?.metaDescription || undefined,
+				ogDescription: metadata?.ogDescription || undefined,
+				keywords: metadata?.keywords || undefined,
+			});
 		} catch (error) {
-			console.warn(`[stage1] Summary failed for tab ${tab.id}:`, error);
-			await serverApi
-				.markStage1Failures([
-					{
-						url: tab.url,
-						reason: error instanceof Error ? error.message : "Stage 1 failed",
-					},
-				])
-				.catch(() => {});
+			console.warn(`[stage1] Metadata failed for tab ${tab.id}:`, error);
 		} finally {
 			completed++;
 			activeTabIds.delete(tab.id);
 			emitProgress("metadata");
 		}
 	});
+
+	let summarized = 0;
+	const prepared = [...inputs.values()];
+	for (let index = 0; index < prepared.length; index += 10) {
+		const batch = prepared.slice(index, index + 10);
+		for (const item of batch) activeTabIds.add(item.tabId);
+		emitProgress("summarizing");
+		try {
+			const result = await serverApi.summarizeStage1(batch);
+			const successful = new Set(
+				result.summaries.filter((summary) => summary.summary).map((summary) => summary.tabId),
+			);
+			summarized += successful.size;
+			const failures = batch
+				.filter((item) => !successful.has(item.tabId))
+				.map((item) => ({ url: item.url, reason: "Stage 1 returned no summary" }));
+			if (failures.length > 0) await serverApi.markStage1Failures(failures);
+		} catch (error) {
+			await serverApi
+				.markStage1Failures(
+					batch.map((item) => ({
+						url: item.url,
+						reason: error instanceof Error ? error.message : "Stage 1 batch failed",
+					})),
+				)
+				.catch(() => {});
+		} finally {
+			for (const item of batch) activeTabIds.delete(item.tabId);
+		}
+	}
 
 	onProgress?.({ kind: "stage1", phase: "done", done: summarized, total: needSummary.length });
 }
@@ -255,6 +276,15 @@ export async function runScreenshotScan(
 	const activeTabIds = new Set<number>();
 	let completed = 0;
 	let summarized = 0;
+	const prepared: Array<{
+		tabId: number;
+		image: string;
+		title: string;
+		url: string;
+		metaDescription?: string;
+		ogDescription?: string;
+		keywords?: string;
+	}> = [];
 	const getConcurrency = () =>
 		clampConcurrency(options.getConcurrency?.() ?? options.concurrency ?? 1, needCapture.length);
 
@@ -278,7 +308,7 @@ export async function runScreenshotScan(
 		activeTabIds.add(tab.id);
 		emitProgress("capturing");
 		clientDebug("stage2", "capturing screenshot", { tabId: tab.id });
-		const image = await captureTabScreenshot(tab.id, 10000);
+		const image = await captureTabScreenshot(tab.id, 2_000);
 		if (!image) {
 			completed++;
 			activeTabIds.delete(tab.id);
@@ -294,21 +324,15 @@ export async function runScreenshotScan(
 
 		try {
 			const metadata = await extractTabContent(tab.id, false);
-			emitProgress("summarizing");
-			const result = await serverApi.summarize([
-				{
-					tabId: tab.id,
-					image,
-					title: tab.title,
-					url: tab.url,
-					metaDescription: metadata?.metaDescription || undefined,
-					ogDescription: metadata?.ogDescription || undefined,
-					keywords: metadata?.keywords || undefined,
-				},
-			]);
-			if (result.summaries.some((summary) => summary.tabId === tab.id && summary.summary)) {
-				summarized++;
-			}
+			prepared.push({
+				tabId: tab.id,
+				image,
+				title: tab.title,
+				url: tab.url,
+				metaDescription: metadata?.metaDescription || undefined,
+				ogDescription: metadata?.ogDescription || undefined,
+				keywords: metadata?.keywords || undefined,
+			});
 		} catch (error) {
 			console.warn(`[stage2] Summarization failed for tab ${tab.id}:`, error);
 		} finally {
@@ -317,6 +341,20 @@ export async function runScreenshotScan(
 			emitProgress("capturing");
 		}
 	});
+	for (let index = 0; index < prepared.length; index += 4) {
+		if (options.shouldCancel?.()) break;
+		const batch = prepared.slice(index, index + 4);
+		for (const item of batch) activeTabIds.add(item.tabId);
+		emitProgress("summarizing");
+		try {
+			const result = await serverApi.summarize(batch);
+			summarized += result.summaries.filter((summary) => summary.summary).length;
+		} catch (error) {
+			console.warn("[stage2] Summarization batch failed:", error);
+		} finally {
+			for (const item of batch) activeTabIds.delete(item.tabId);
+		}
+	}
 
 	onProgress?.({ kind: "stage2", phase: "done", done: summarized, total: needCapture.length });
 }

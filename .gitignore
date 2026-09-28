@@ -5,6 +5,7 @@ dist/
 
 # Server runtime data
 apps/server/data/
+apps/server/credentials/
 
 # Local extension packages and persistent CRX key
 apps/extension/.local/
@@ -22,7 +23,6 @@ apps/extension/.local/
 .codex/
 .ref/
 auth.json
-apps/server/auth.json
 *.swp
 *.swo
 

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -11,6 +12,7 @@ import type {
 	StoredTabMetadata,
 	StoredTabSet,
 	StoredTabSetSummary,
+	TabSemanticProfile,
 	UserRule,
 } from "@tab-orga/shared";
 import { eq, inArray } from "drizzle-orm";
@@ -45,14 +47,8 @@ function readLegacyJson<T>(filename: string, fallback: T): T {
 }
 
 const DEFAULT_SETTINGS: ServerSettings = {
-	model: "gpt-5.3-codex",
-	contentDepth: "meta",
 	generalPrompt: "",
-	organizationThinking: "xhigh",
-	summaryThinking: "medium",
-	serviceTier: "default",
 	groupTitleLength: "medium",
-	port: 7777,
 };
 
 interface ScreenshotCacheEntry {
@@ -70,7 +66,9 @@ export interface SummaryAvailability {
 	stage: SummaryStage;
 	bestSummary?: string;
 	stage1Summary?: string;
+	stage1Profile?: TabSemanticProfile;
 	stage2Summary?: string;
+	stage2Profile?: TabSemanticProfile;
 	stage1CapturedAt?: number;
 	stage2CapturedAt?: number;
 	stage1FailureAt?: number;
@@ -107,11 +105,15 @@ const summaryCacheTable = sqliteTable("summary_cache", {
 	summary: text("summary").notNull(),
 	capturedAt: integer("captured_at").notNull(),
 	stage1Summary: text("stage1_summary"),
+	stage1Profile: text("stage1_profile"),
+	stage1Fingerprint: text("stage1_fingerprint"),
 	stage1CapturedAt: integer("stage1_captured_at"),
 	stage1FailureAt: integer("stage1_failure_at"),
 	stage1RetryAfter: integer("stage1_retry_after"),
 	stage1FailureReason: text("stage1_failure_reason"),
 	stage2Summary: text("stage2_summary"),
+	stage2Profile: text("stage2_profile"),
+	stage2Fingerprint: text("stage2_fingerprint"),
 	stage2CapturedAt: integer("stage2_captured_at"),
 });
 
@@ -231,7 +233,9 @@ function initializeDatabase(): void {
 			favicon_url TEXT,
 			metadata TEXT NOT NULL,
 			stage1_summary TEXT,
+			stage1_profile TEXT,
 			stage2_summary TEXT,
+			stage2_profile TEXT,
 			sort_order INTEGER NOT NULL,
 			created_at TEXT NOT NULL
 		);
@@ -245,11 +249,15 @@ function initializeDatabase(): void {
 	`);
 
 	ensureColumn("summary_cache", "stage1_summary", "TEXT");
+	ensureColumn("summary_cache", "stage1_profile", "TEXT");
+	ensureColumn("summary_cache", "stage1_fingerprint", "TEXT");
 	ensureColumn("summary_cache", "stage1_captured_at", "INTEGER");
 	ensureColumn("summary_cache", "stage1_failure_at", "INTEGER");
 	ensureColumn("summary_cache", "stage1_retry_after", "INTEGER");
 	ensureColumn("summary_cache", "stage1_failure_reason", "TEXT");
 	ensureColumn("summary_cache", "stage2_summary", "TEXT");
+	ensureColumn("summary_cache", "stage2_profile", "TEXT");
+	ensureColumn("summary_cache", "stage2_fingerprint", "TEXT");
 	ensureColumn("summary_cache", "stage2_captured_at", "INTEGER");
 	sqlite.exec(`
 		CREATE INDEX IF NOT EXISTS idx_summary_cache_stage1_captured_at
@@ -286,37 +294,15 @@ function oneOf<T extends string>(value: unknown, allowed: readonly T[], fallback
 function sanitizeSettings(raw: unknown): ServerSettings {
 	const value = raw && typeof raw === "object" ? (raw as Partial<ServerSettings>) : {};
 	return {
-		model:
-			typeof value.model === "string" && value.model.trim() ? value.model : DEFAULT_SETTINGS.model,
-		contentDepth: oneOf(value.contentDepth, ["title-url", "meta", "full"] as const, "meta"),
 		generalPrompt:
 			typeof value.generalPrompt === "string"
 				? value.generalPrompt
 				: DEFAULT_SETTINGS.generalPrompt,
-		organizationThinking: oneOf(
-			value.organizationThinking,
-			["minimal", "low", "medium", "high", "xhigh"] as const,
-			DEFAULT_SETTINGS.organizationThinking,
-		),
-		summaryThinking: oneOf(
-			value.summaryThinking,
-			["minimal", "low", "medium", "high", "xhigh"] as const,
-			DEFAULT_SETTINGS.summaryThinking,
-		),
-		serviceTier: oneOf(
-			value.serviceTier,
-			["flex", "default", "priority"] as const,
-			DEFAULT_SETTINGS.serviceTier,
-		),
 		groupTitleLength: oneOf(
 			value.groupTitleLength,
 			["short", "medium", "long"] as const,
 			DEFAULT_SETTINGS.groupTitleLength,
 		),
-		port:
-			typeof value.port === "number" && Number.isInteger(value.port) && value.port > 0
-				? value.port
-				: DEFAULT_SETTINGS.port,
 	};
 }
 
@@ -363,6 +349,12 @@ export function normalizeUrl(url: string): string {
 	}
 }
 
+export function summaryEvidenceFingerprint(url: string, title: string): string {
+	return createHash("sha256")
+		.update(`${normalizeUrl(url)}\n${title.trim().replace(/\s+/g, " ")}`)
+		.digest("hex");
+}
+
 function saveRuleRows(rules: UserRule[]): void {
 	withTransaction(() => {
 		db.delete(rulesTable).run();
@@ -406,17 +398,51 @@ function isFresh(capturedAt: number | null | undefined): capturedAt is number {
 	return typeof capturedAt === "number" && Date.now() - capturedAt < SUMMARY_CACHE_TTL;
 }
 
+function parseSemanticProfile(value: string | null | undefined): TabSemanticProfile | undefined {
+	if (!value) return undefined;
+	try {
+		const parsed = JSON.parse(value) as Partial<TabSemanticProfile>;
+		if (!parsed || typeof parsed.summary !== "string") return undefined;
+		return {
+			summary: parsed.summary,
+			subjects: Array.isArray(parsed.subjects)
+				? parsed.subjects.filter((item): item is string => typeof item === "string")
+				: [],
+			activity: typeof parsed.activity === "string" ? parsed.activity : "",
+			namedEntities: Array.isArray(parsed.namedEntities)
+				? parsed.namedEntities.filter((item): item is string => typeof item === "string")
+				: [],
+			confidence:
+				typeof parsed.confidence === "number" ? Math.max(0, Math.min(1, parsed.confidence)) : 0.5,
+			needsMoreEvidence: parsed.needsMoreEvidence === true,
+		};
+	} catch {
+		return undefined;
+	}
+}
+
 function availabilityFromRow(
 	rawUrl: string,
 	normalized: string,
 	row?: SummaryCacheRow,
+	expectedFingerprint?: string,
 ): SummaryAvailability {
 	if (!row) {
 		return { url: rawUrl, normalizedUrl: normalized, stage: "none" };
 	}
 
-	const stage2Summary = isFresh(row.stage2CapturedAt) ? row.stage2Summary || undefined : undefined;
-	const stage1Summary = isFresh(row.stage1CapturedAt) ? row.stage1Summary || undefined : undefined;
+	const stage2Summary =
+		isFresh(row.stage2CapturedAt) &&
+		(!expectedFingerprint || row.stage2Fingerprint === expectedFingerprint)
+			? row.stage2Summary || undefined
+			: undefined;
+	const stage1Summary =
+		isFresh(row.stage1CapturedAt) &&
+		(!expectedFingerprint || row.stage1Fingerprint === expectedFingerprint)
+			? row.stage1Summary || undefined
+			: undefined;
+	const stage2Profile = stage2Summary ? parseSemanticProfile(row.stage2Profile) : undefined;
+	const stage1Profile = stage1Summary ? parseSemanticProfile(row.stage1Profile) : undefined;
 	const stage1RetryAfter =
 		typeof row.stage1RetryAfter === "number" && row.stage1RetryAfter > Date.now()
 			? row.stage1RetryAfter
@@ -434,7 +460,9 @@ function availabilityFromRow(
 			stage: "stage2",
 			bestSummary: stage2Summary,
 			stage1Summary,
+			stage1Profile,
 			stage2Summary,
+			stage2Profile,
 			stage1CapturedAt: row.stage1CapturedAt ?? undefined,
 			stage2CapturedAt: row.stage2CapturedAt ?? undefined,
 			...failureFields,
@@ -448,6 +476,7 @@ function availabilityFromRow(
 			stage: "stage1",
 			bestSummary: stage1Summary,
 			stage1Summary,
+			stage1Profile,
 			stage1CapturedAt: row.stage1CapturedAt ?? undefined,
 			...failureFields,
 		};
@@ -468,7 +497,12 @@ function getSummaryRows(urls: string[]): Map<string, SummaryCacheRow> {
 }
 
 function cacheSummaryRows(
-	summaries: Array<{ url: string; summary: string }>,
+	summaries: Array<{
+		url: string;
+		summary: string;
+		profile?: TabSemanticProfile;
+		fingerprint?: string;
+	}>,
 	capturedAt: number,
 	stage: "stage1" | "stage2",
 ): void {
@@ -479,7 +513,13 @@ function cacheSummaryRows(
 }
 
 function cacheSummaryRowsWithTimestamps(
-	summaries: Array<{ url: string; summary: string; capturedAt: number }>,
+	summaries: Array<{
+		url: string;
+		summary: string;
+		capturedAt: number;
+		profile?: TabSemanticProfile;
+		fingerprint?: string;
+	}>,
 	stage: "stage1" | "stage2",
 ): void {
 	const rows = summaries
@@ -488,6 +528,8 @@ function cacheSummaryRowsWithTimestamps(
 			url: normalizeUrl(entry.url),
 			summary: entry.summary.trim(),
 			capturedAt: entry.capturedAt || Date.now(),
+			profile: entry.profile ? JSON.stringify(entry.profile) : undefined,
+			fingerprint: entry.fingerprint,
 		}));
 
 	if (rows.length === 0) return;
@@ -510,11 +552,15 @@ function cacheSummaryRowsWithTimestamps(
 					summary: bestSummary || row.summary,
 					capturedAt: bestCapturedAt || row.capturedAt,
 					stage1Summary: stage === "stage1" ? row.summary : existing?.stage1Summary,
+					stage1Profile: stage === "stage1" ? row.profile : existing?.stage1Profile,
+					stage1Fingerprint: stage === "stage1" ? row.fingerprint : existing?.stage1Fingerprint,
 					stage1CapturedAt: stage === "stage1" ? row.capturedAt : existing?.stage1CapturedAt,
 					stage1FailureAt: stage === "stage1" ? null : existing?.stage1FailureAt,
 					stage1RetryAfter: stage === "stage1" ? null : existing?.stage1RetryAfter,
 					stage1FailureReason: stage === "stage1" ? null : existing?.stage1FailureReason,
 					stage2Summary: stage === "stage2" ? row.summary : existing?.stage2Summary,
+					stage2Profile: stage === "stage2" ? row.profile : existing?.stage2Profile,
+					stage2Fingerprint: stage === "stage2" ? row.fingerprint : existing?.stage2Fingerprint,
 					stage2CapturedAt: stage === "stage2" ? row.capturedAt : existing?.stage2CapturedAt,
 				})
 				.onConflictDoUpdate({
@@ -523,11 +569,15 @@ function cacheSummaryRowsWithTimestamps(
 						summary: bestSummary || row.summary,
 						capturedAt: bestCapturedAt || row.capturedAt,
 						stage1Summary: stage === "stage1" ? row.summary : existing?.stage1Summary,
+						stage1Profile: stage === "stage1" ? row.profile : existing?.stage1Profile,
+						stage1Fingerprint: stage === "stage1" ? row.fingerprint : existing?.stage1Fingerprint,
 						stage1CapturedAt: stage === "stage1" ? row.capturedAt : existing?.stage1CapturedAt,
 						stage1FailureAt: stage === "stage1" ? null : existing?.stage1FailureAt,
 						stage1RetryAfter: stage === "stage1" ? null : existing?.stage1RetryAfter,
 						stage1FailureReason: stage === "stage1" ? null : existing?.stage1FailureReason,
 						stage2Summary: stage === "stage2" ? row.summary : existing?.stage2Summary,
+						stage2Profile: stage === "stage2" ? row.profile : existing?.stage2Profile,
+						stage2Fingerprint: stage === "stage2" ? row.fingerprint : existing?.stage2Fingerprint,
 						stage2CapturedAt: stage === "stage2" ? row.capturedAt : existing?.stage2CapturedAt,
 					},
 				})
@@ -801,28 +851,63 @@ export const storage = {
 		);
 	},
 
-	getSummaryAvailability(urls: string[]): Record<string, SummaryAvailability> {
+	getSummaryAvailability(
+		urls: string[],
+		evidence: Array<{ url: string; title: string }> = [],
+	): Record<string, SummaryAvailability> {
 		const rows = getSummaryRows(urls);
+		const fingerprints = new Map(
+			evidence.map((entry) => [
+				normalizeUrl(entry.url),
+				summaryEvidenceFingerprint(entry.url, entry.title),
+			]),
+		);
 		return Object.fromEntries(
 			urls.map((url) => {
 				const normalized = normalizeUrl(url);
-				return [url, availabilityFromRow(url, normalized, rows.get(normalized))];
+				return [
+					url,
+					availabilityFromRow(url, normalized, rows.get(normalized), fingerprints.get(normalized)),
+				];
 			}),
 		);
 	},
 
-	getCachedUrls(urls: string[], minimumStage: "any" | "stage1" | "stage2" = "any"): string[] {
-		const availability = this.getSummaryAvailability(urls);
+	getCachedUrls(
+		urls: string[],
+		minimumStage: "any" | "stage1" | "stage2" = "any",
+		evidence: Array<{ url: string; title: string }> = [],
+	): string[] {
+		const availability = this.getSummaryAvailability(urls, evidence);
+		const rows = getSummaryRows(urls);
+		const fingerprints = new Map(
+			evidence.map((entry) => [
+				normalizeUrl(entry.url),
+				summaryEvidenceFingerprint(entry.url, entry.title),
+			]),
+		);
 		return urls.filter((url) => {
 			const stage = availability[url]?.stage;
+			const expected = fingerprints.get(normalizeUrl(url));
+			const row = rows.get(normalizeUrl(url));
+			if (expected) {
+				const matchesStage1 = row?.stage1Fingerprint === expected;
+				const matchesStage2 = row?.stage2Fingerprint === expected;
+				if (minimumStage === "stage2" && !matchesStage2) return false;
+				if (minimumStage === "stage1" && !matchesStage1 && !matchesStage2) return false;
+				if (minimumStage === "any" && !matchesStage1 && !matchesStage2) return false;
+			}
 			if (minimumStage === "stage2") return stage === "stage2";
 			if (minimumStage === "stage1") return stage === "stage1" || stage === "stage2";
 			return stage === "stage1" || stage === "stage2";
 		});
 	},
 
-	getStage1BlockedUrls(urls: string[]): string[] {
-		const availability = this.getSummaryAvailability(urls);
+	getStage1BlockedUrls(
+		urls: string[],
+		evidence: Array<{ url: string; title: string }> = [],
+	): string[] {
+		const availability = this.getSummaryAvailability(urls, evidence);
 		return urls.filter((url) => {
 			const state = availability[url];
 			return state?.stage === "none" && Boolean(state.stage1RetryAfter);
@@ -876,16 +961,37 @@ export const storage = {
 		});
 	},
 
-	cacheSummaries(summaries: Array<{ url: string; summary: string }>): void {
+	cacheSummaries(
+		summaries: Array<{
+			url: string;
+			summary: string;
+			profile?: TabSemanticProfile;
+			fingerprint?: string;
+		}>,
+	): void {
 		this.cacheStage2Summaries(summaries);
 	},
 
-	cacheStage1Summaries(summaries: Array<{ url: string; summary: string }>): void {
+	cacheStage1Summaries(
+		summaries: Array<{
+			url: string;
+			summary: string;
+			profile?: TabSemanticProfile;
+			fingerprint?: string;
+		}>,
+	): void {
 		const now = Date.now();
 		cacheSummaryRows(summaries, now, "stage1");
 	},
 
-	cacheStage2Summaries(summaries: Array<{ url: string; summary: string }>): void {
+	cacheStage2Summaries(
+		summaries: Array<{
+			url: string;
+			summary: string;
+			profile?: TabSemanticProfile;
+			fingerprint?: string;
+		}>,
+	): void {
 		const now = Date.now();
 		cacheSummaryRows(summaries, now, "stage2");
 	},

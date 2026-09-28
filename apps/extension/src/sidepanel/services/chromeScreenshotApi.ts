@@ -25,13 +25,13 @@ async function withTimeout<T>(
 }
 
 /**
- * Capture a full-page screenshot of a tab (up to maxHeight pixels)
+ * Capture a bounded top-of-page screenshot for semantic analysis.
  * using the Chrome DevTools Protocol via chrome.debugger.
  * Returns a base64-encoded JPEG or null on failure.
  */
 export async function captureTabScreenshot(
 	tabId: number,
-	maxHeight = 10000,
+	maxHeight = 2_000,
 ): Promise<string | null> {
 	if (!isChromeExtension || !chrome.debugger) return null;
 
@@ -61,6 +61,7 @@ export async function captureTabScreenshot(
 		const size = metrics.cssContentSize || metrics.contentSize;
 		const width = Math.ceil(size?.width || 1280);
 		const height = Math.min(Math.ceil(size?.height || 900), maxHeight);
+		const scale = Math.min(1, 1_600 / width);
 
 		// Capture the current viewport without resizing — avoids visible layout reflow
 		// and the "DevTools is debugging" banner is shown for a shorter duration.
@@ -72,7 +73,7 @@ export async function captureTabScreenshot(
 			chrome.debugger.sendCommand(target, "Page.captureScreenshot", {
 				format: "jpeg",
 				quality: 50,
-				clip: { x: 0, y: 0, width, height, scale: 1 },
+				clip: { x: 0, y: 0, width, height, scale },
 			}),
 			`Screenshot capture for tab ${tabId}`,
 		)) as { data: string };
@@ -113,7 +114,7 @@ export async function captureTabScreenshot(
  */
 export async function captureTabScreenshots(
 	tabIds: number[],
-	maxHeight = 10000,
+	maxHeight = 2_000,
 	onProgress?: (done: number, total: number) => void,
 ): Promise<Map<number, string>> {
 	const results = new Map<number, string>();

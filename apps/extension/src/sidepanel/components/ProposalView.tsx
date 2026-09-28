@@ -3,6 +3,7 @@ import type {
 	MemoryCandidate,
 	StoredTabSetSuggestion,
 	TabInfo,
+	UngroupedTabReason,
 } from "@tab-orga/shared";
 import { type Dispatch, useMemo, useReducer, useState } from "react";
 import { chromeBgStyle, chromeBorderStyle } from "../utils/chromeColors.js";
@@ -16,6 +17,7 @@ interface ProposalViewProps {
 	testMode: boolean;
 	memoryCandidates: MemoryCandidate[];
 	storeSuggestions: StoredTabSetSuggestion[];
+	ungrouped: UngroupedTabReason[];
 	onRefine: (feedback: string, targetGroupName?: string, targetTabId?: number) => void;
 	onApply: (suggestions: GroupingSuggestion[]) => void;
 	onSaveMemoryCandidate: (observation: string) => Promise<void>;
@@ -454,6 +456,12 @@ function ProposalGroup({
 
 			{isExpanded && (
 				<div className="px-3 pb-1.5">
+					{suggestion.rationale && (
+						<p className="mb-2 text-[11px] leading-relaxed text-gray-500 dark:text-gray-400">
+							{suggestion.basis ? `${suggestion.basis}: ` : ""}
+							{suggestion.rationale}
+						</p>
+					)}
 					<FeedbackInput
 						placeholder={`Feedback on "${suggestion.groupName}"... (Enter to send)`}
 						disabled={refining}
@@ -488,10 +496,12 @@ function ProposalGroup({
 
 function UngroupedProposalTabs({
 	tabs,
+	reasons,
 	expanded,
 	dispatch,
 }: {
 	tabs: TabInfo[];
+	reasons: Map<number, string>;
 	expanded: boolean;
 	dispatch: Dispatch<ProposalAction>;
 }) {
@@ -520,6 +530,11 @@ function UngroupedProposalTabs({
 								<div className="text-[10px] text-gray-400 dark:text-gray-500 truncate">
 									{domain(tab.url)}
 								</div>
+								{reasons.get(tab.id) && (
+									<div className="mt-0.5 text-[10px] leading-snug text-gray-500 dark:text-gray-400">
+										{reasons.get(tab.id)}
+									</div>
+								)}
 							</div>
 						</div>
 					))}
@@ -573,6 +588,7 @@ export function ProposalView({
 	testMode,
 	memoryCandidates,
 	storeSuggestions,
+	ungrouped,
 	onRefine,
 	onApply,
 	onSaveMemoryCandidate,
@@ -581,6 +597,10 @@ export function ProposalView({
 }: ProposalViewProps) {
 	const [state, dispatch] = useReducer(proposalReducer, undefined, createProposalState);
 	const tabsById = useMemo(() => new Map(tabs.map((tab) => [tab.id, tab])), [tabs]);
+	const ungroupedReasons = useMemo(
+		() => new Map(ungrouped.map((entry) => [entry.tabId, entry.reason])),
+		[ungrouped],
+	);
 	const ungroupedTabs = useMemo(() => {
 		const groupedTabIds = new Set<number>();
 		for (const suggestion of suggestions) {
@@ -628,6 +648,7 @@ export function ProposalView({
 
 			<UngroupedProposalTabs
 				tabs={ungroupedTabs}
+				reasons={ungroupedReasons}
 				expanded={state.expandedGroup === "__ungrouped__"}
 				dispatch={dispatch}
 			/>

@@ -3,6 +3,7 @@ import type {
 	StoredTabSetSuggestion,
 	TabGroupInfo,
 	TabInfo,
+	UngroupedTabReason,
 } from "@tab-orga/shared";
 
 export const ORGANIZE_RUN_KEY = "tabOrganizeRun";
@@ -30,6 +31,7 @@ export interface StoredOrganizeRun {
 	suggestions?: GroupingSuggestion[];
 	reasoning?: string;
 	storeSuggestions?: StoredTabSetSuggestion[];
+	ungrouped?: UngroupedTabReason[];
 	error?: string;
 }
 

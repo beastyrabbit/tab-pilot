@@ -1,10 +1,10 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { aiRuntimeRoute } from "./routes/ai-runtime.js";
 import { contentBridgeRoute } from "./routes/content-bridge.js";
 import { debugRoute } from "./routes/debug.js";
 import { healthRoute } from "./routes/health.js";
 import { memoryRoute } from "./routes/memory.js";
-import { modelsRoute } from "./routes/models.js";
 import { organizeRoute } from "./routes/organize.js";
 import { rulesRoute } from "./routes/rules.js";
 import { settingsRoute } from "./routes/settings.js";
@@ -70,7 +70,7 @@ app.use("*", async (c, next) => {
 app.route("/api", healthRoute);
 app.route("/api", organizeRoute);
 app.route("/api", settingsRoute);
-app.route("/api", modelsRoute);
+app.route("/api", aiRuntimeRoute);
 app.route("/api", rulesRoute);
 app.route("/api", memoryRoute);
 app.route("/api", storedSetsRoute);

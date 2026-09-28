@@ -2,14 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../services/storage.js", () => {
 	let settings = {
-		model: "gpt-5.3-codex",
-		contentDepth: "meta" as const,
 		generalPrompt: "",
-		organizationThinking: "xhigh" as const,
-		summaryThinking: "medium" as const,
-		serviceTier: "default" as const,
 		groupTitleLength: "medium" as const,
-		port: 7777,
 	};
 	return {
 		storage: {
@@ -30,41 +24,28 @@ describe("Settings endpoints", () => {
 		const res = await app.request("/api/settings");
 		expect(res.status).toBe(200);
 		const body = await res.json();
-		expect(body).toHaveProperty("model");
-		expect(body).toHaveProperty("contentDepth");
-		expect(body.organizationThinking).toBe("xhigh");
-		expect(body.summaryThinking).toBe("medium");
-		expect(body.serviceTier).toBe("default");
+		expect(body).toEqual({ generalPrompt: "", groupTitleLength: "medium" });
 		expect(body.groupTitleLength).toBe("medium");
 	});
 
-	it("PUT /api/settings updates settings", async () => {
+	it("PUT /api/settings updates user preferences", async () => {
+		const res = await app.request("/api/settings", {
+			method: "PUT",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ generalPrompt: "Prefer work projects", groupTitleLength: "short" }),
+		});
+		expect(res.status).toBe(200);
+		const body = await res.json();
+		expect(body.generalPrompt).toBe("Prefer work projects");
+		expect(body.groupTitleLength).toBe("short");
+	});
+
+	it("PUT /api/settings rejects runtime overrides", async () => {
 		const res = await app.request("/api/settings", {
 			method: "PUT",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ model: "gpt-4o-mini" }),
 		});
-		expect(res.status).toBe(200);
-		const body = await res.json();
-		expect(body.model).toBe("gpt-4o-mini");
-	});
-
-	it("PUT /api/settings updates thinking and speed settings", async () => {
-		const res = await app.request("/api/settings", {
-			method: "PUT",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({
-				organizationThinking: "high",
-				summaryThinking: "low",
-				serviceTier: "priority",
-				groupTitleLength: "short",
-			}),
-		});
-		expect(res.status).toBe(200);
-		const body = await res.json();
-		expect(body.organizationThinking).toBe("high");
-		expect(body.summaryThinking).toBe("low");
-		expect(body.serviceTier).toBe("priority");
-		expect(body.groupTitleLength).toBe("short");
+		expect(res.status).toBe(400);
 	});
 });

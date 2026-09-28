@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Tab Organizer",
   "description": "AI-powered tab organizer that groups your browser tabs intelligently",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "permissions": [
     "tabs",
     "tabGroups",

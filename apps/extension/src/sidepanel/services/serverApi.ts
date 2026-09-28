@@ -1,13 +1,12 @@
 import type {
 	AIEditMemoriesResponse,
 	AIMemory,
+	AIRuntimeResponse,
 	AppendStoredTabsRequest,
 	CreateStoredTabSetRequest,
 	ErrorResponse,
 	GetOrganizeRunResponse,
 	HealthResponse,
-	LearnRequest,
-	ModelsResponse,
 	OrganizeRequest,
 	OrganizeResponse,
 	PublicSettings,
@@ -16,6 +15,8 @@ import type {
 	StartOrganizeRunResponse,
 	StoredTabSet,
 	StoredTabSetSummary,
+	TabSemanticProfile,
+	TabSemanticProfileResult,
 	UserRule,
 } from "@tab-orga/shared";
 
@@ -29,7 +30,9 @@ export interface SummaryAvailability {
 	stage: SummaryStage;
 	bestSummary?: string;
 	stage1Summary?: string;
+	stage1Profile?: TabSemanticProfile;
 	stage2Summary?: string;
+	stage2Profile?: TabSemanticProfile;
 	stage1CapturedAt?: number;
 	stage2CapturedAt?: number;
 	stage1FailureAt?: number;
@@ -99,13 +102,6 @@ export const serverApi = {
 		});
 	},
 
-	learn(body: LearnRequest): Promise<void> {
-		return request("/organize/learn", {
-			method: "POST",
-			body: JSON.stringify(body),
-		});
-	},
-
 	getSettings(): Promise<PublicSettings> {
 		return request("/settings");
 	},
@@ -117,8 +113,8 @@ export const serverApi = {
 		});
 	},
 
-	getModels(): Promise<ModelsResponse> {
-		return request("/models");
+	getAIRuntime(): Promise<AIRuntimeResponse> {
+		return request("/ai/runtime");
 	},
 
 	getRules(): Promise<UserRule[]> {
@@ -186,8 +182,12 @@ export const serverApi = {
 			ogDescription?: string;
 			keywords?: string;
 		}>,
-	): Promise<{ summaries: Array<{ tabId: number; summary: string }> }> {
-		return request<{ summaries: Array<{ tabId: number; summary: string }> }>("/summarize", {
+	): Promise<{
+		profiles: TabSemanticProfileResult[];
+		summaries: Array<{ tabId: number; summary: string }>;
+		failures: Array<{ tabId: number; error: string }>;
+	}> {
+		return request("/summarize", {
 			method: "POST",
 			body: JSON.stringify({ screenshots }),
 		});
@@ -202,8 +202,12 @@ export const serverApi = {
 			ogDescription?: string;
 			keywords?: string;
 		}>,
-	): Promise<{ summaries: Array<{ tabId: number; summary: string }> }> {
-		return request<{ summaries: Array<{ tabId: number; summary: string }> }>("/summarize/stage1", {
+	): Promise<{
+		profiles: TabSemanticProfileResult[];
+		summaries: Array<{ tabId: number; summary: string }>;
+		failures: Array<{ tabId: number; error: string }>;
+	}> {
+		return request("/summarize/stage1", {
 			method: "POST",
 			body: JSON.stringify({ tabs }),
 		});
@@ -213,10 +217,11 @@ export const serverApi = {
 	async checkCachedUrls(
 		urls: string[],
 		minimumStage: "any" | "stage1" | "stage2" = "any",
+		evidence?: Array<{ url: string; title: string }>,
 	): Promise<Set<string>> {
 		const result = await request<{ cached: string[] }>("/summarize/check", {
 			method: "POST",
-			body: JSON.stringify({ urls, minimumStage }),
+			body: JSON.stringify({ urls, minimumStage, evidence }),
 		});
 		return new Set(result.cached);
 	},
@@ -224,6 +229,7 @@ export const serverApi = {
 	async checkSummaryState(
 		urls: string[],
 		minimumStage: "any" | "stage1" | "stage2" = "any",
+		evidence?: Array<{ url: string; title: string }>,
 	): Promise<{
 		cached: Set<string>;
 		stage1Blocked: Set<string>;
@@ -235,7 +241,7 @@ export const serverApi = {
 			availability: Record<string, SummaryAvailability>;
 		}>("/summarize/check", {
 			method: "POST",
-			body: JSON.stringify({ urls, minimumStage }),
+			body: JSON.stringify({ urls, minimumStage, evidence }),
 		});
 		return {
 			cached: new Set(result.cached),
