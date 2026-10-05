@@ -126,7 +126,8 @@ export function GroupCard({
 							aria-label="Store group"
 							onClick={async () => {
 								const name = group.title || "Untitled";
-								if (!window.confirm(`Store "${name}" and close ${groupTabs.length} tabs?`)) {
+								const storable = groupTabs.filter((tab) => /^https?:/.test(tab.url)).length;
+								if (!window.confirm(`Store "${name}" and close ${storable} tabs?`)) {
 									return;
 								}
 								await onStore(group);

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export type ServerStatus = "checking" | "online" | "offline";
 
@@ -6,7 +6,12 @@ export function useServerHealth() {
 	const [status, setStatus] = useState<ServerStatus>("checking");
 	const [codexConnected, setCodexConnected] = useState(false);
 
+	const inFlight = useRef(false);
+
 	const check = useCallback(async () => {
+		// An unreachable proxy must not pile up requests from the polling interval.
+		if (inFlight.current) return;
+		inFlight.current = true;
 		try {
 			const stored = await chrome.storage.local.get("tab-orga-settings");
 			const url = (
@@ -17,6 +22,7 @@ export function useServerHealth() {
 				?.proxyApiKey;
 			const response = await fetch(`${url}/models`, {
 				headers: key ? { Authorization: `Bearer ${key}` } : undefined,
+				signal: AbortSignal.timeout(5_000),
 			});
 			if (!response.ok) throw new Error(`Proxy returned ${response.status}`);
 			setStatus("online");
@@ -24,6 +30,8 @@ export function useServerHealth() {
 		} catch {
 			setStatus("offline");
 			setCodexConnected(false);
+		} finally {
+			inFlight.current = false;
 		}
 	}, []);
 

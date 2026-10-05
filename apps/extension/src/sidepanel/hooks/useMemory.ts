@@ -42,9 +42,10 @@ export function useMemory() {
 				{
 					id: crypto.randomUUID(),
 					observation,
+					source: "correction",
 					createdAt: new Date().toISOString(),
 					updatedAt: new Date().toISOString(),
-				},
+				} satisfies AIMemory & { updatedAt: string },
 			];
 			await chrome.storage.local.set({ [KEY]: next });
 			refresh();
@@ -68,9 +69,5 @@ export function useMemory() {
 		refresh();
 	}, [refresh]);
 
-	const aiEdit = useCallback(async (instruction: string) => {
-		return `Memories are stored locally. Edit them directly to apply: ${instruction}`;
-	}, []);
-
-	return { memories, loading, add, update, remove, clearAll, aiEdit, refresh };
+	return { memories, loading, add, update, remove, clearAll, refresh };
 }

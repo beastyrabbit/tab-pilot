@@ -17,9 +17,9 @@ The target setup is a Developer Mode extension that calls EasyCLIProxyAPI direct
 ## Remaining implementation
 
 - [x] Move stored tab sets from the server into `chrome.storage.local`.
-- [x] Move summary cache and summary generation into the extension service worker.
-- [x] Move content bridge state into the extension service worker.
-- [x] Replace organization run creation and polling with service-worker jobs.
+- [x] Replace background summaries with on-demand page context read during organize.
+- [x] Remove the content bridge; the side panel reads page content directly.
+- [x] Run organize directly from the side panel against the proxy.
 - [x] Replace refinement requests with direct proxy requests.
 - [x] Add a shared browser-safe proposal validator.
 - [x] Remove all remaining `/api/*` calls from extension code.
@@ -27,9 +27,14 @@ The target setup is a Developer Mode extension that calls EasyCLIProxyAPI direct
 - [x] Remove `apps/server`, Docker Compose, and server package dependencies.
 - [x] Replace CRX managed-policy packaging with Developer Mode output.
 - [x] Update `t3.json` for unpacked extension builds.
-- [x] Run an end-to-end check against EasyCLIProxyAPI: models, summaries, organize, refine, apply.
+- [x] Run an end-to-end check against EasyCLIProxyAPI: models, organize, refine, apply.
 - [x] Update README and setup docs for the standalone workflow.
+
+## Known limitations
+
+- An organize or refine request runs inside the side panel. Closing the panel while the AI is working cancels that run; settings, fixed groups, stored sets, memories and run history persist.
+- Moving organize runs into a service-worker job would let them survive the panel closing.
 
 ## Definition of done
 
-The extension loads from `apps/extension/dist`, reaches EasyCLIProxyAPI without Docker, organizes and refines tabs, persists data after the side panel closes, and contains no imports or requests targeting the removed server.
+The extension loads from `apps/extension/dist`, reaches EasyCLIProxyAPI without Docker, organizes and refines tabs, keeps its data in `chrome.storage.local` across side panel sessions, and contains no imports or requests targeting the removed server.

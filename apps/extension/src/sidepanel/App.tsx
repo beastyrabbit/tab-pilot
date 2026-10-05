@@ -25,7 +25,7 @@ import {
 	ungroupTabs,
 	updateGroup,
 } from "./services/chromeTabsApi.js";
-import { resolveFixedGroupIds, setFixedGroup } from "./services/fixedGroups.js";
+import { resolveFixedGroupIds, setFixedGroup, syncFixedGroupIds } from "./services/fixedGroups.js";
 import type { ScanProgress } from "./services/screenshotCache.js";
 
 type SummaryAvailability = { stage1Summary?: string; stage2Summary?: string };
@@ -312,7 +312,6 @@ export function App() {
 		remove: removeMemory,
 		clearAll: clearMemories,
 		add: addMemory,
-		aiEdit: aiEditMemories,
 		refresh: refreshMemories,
 	} = useMemory();
 	const { testMode, toggle: toggleTestMode } = useTestMode();
@@ -322,7 +321,9 @@ export function App() {
 	const [fixedGroupIds, setFixedGroupIds] = useState<Set<number>>(new Set());
 
 	useEffect(() => {
-		void resolveFixedGroupIds(groups).then(setFixedGroupIds);
+		void syncFixedGroupIds(groups)
+			.then(() => resolveFixedGroupIds(groups))
+			.then(setFixedGroupIds);
 	}, [groups]);
 
 	useEffect(() => {
@@ -423,13 +424,19 @@ export function App() {
 			color: group.color,
 			tabs: storedTabs,
 		});
-		await closeTabs(groupTabs.map((tab) => tab.id));
+		// Only close what was saved; chrome:// and other non-restorable tabs stay open.
+		await closeTabs(groupTabs.filter((tab) => isStorableUrl(tab.url)).map((tab) => tab.id));
 		refresh();
 	};
 
 	const handleStoreSuggestion = async (suggestion: StoredTabSetSuggestion) => {
-		const selectedTabs = tabs.filter((tab) => suggestion.tabIds.includes(tab.id));
-		if (selectedTabs.length === 0) return;
+		const selectedTabs = tabs.filter(
+			(tab) => suggestion.tabIds.includes(tab.id) && isStorableUrl(tab.url),
+		);
+		if (selectedTabs.length === 0) {
+			window.alert("The selected suggestion has no restorable http(s) tabs to store.");
+			return;
+		}
 		if (
 			!window.confirm(
 				`Store ${selectedTabs.length} tabs in "${suggestion.setName}" and close them?`,
@@ -553,7 +560,6 @@ export function App() {
 					onUpdate={updateMemory}
 					onDelete={removeMemory}
 					onClearAll={clearMemories}
-					onAIEdit={aiEditMemories}
 					onClose={() => setActivePanel(null)}
 				/>
 			)}

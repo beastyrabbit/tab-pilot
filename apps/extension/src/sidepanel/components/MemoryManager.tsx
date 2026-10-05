@@ -6,7 +6,6 @@ interface MemoryManagerProps {
 	onUpdate: (id: string, observation: string) => void | Promise<void>;
 	onDelete: (id: string) => void | Promise<void>;
 	onClearAll: () => void | Promise<void>;
-	onAIEdit: (instruction: string) => Promise<string>;
 	onClose: () => void;
 }
 
@@ -101,13 +100,9 @@ export function MemoryManager({
 	onUpdate,
 	onDelete,
 	onClearAll,
-	onAIEdit,
 	onClose,
 }: MemoryManagerProps) {
 	const [confirmClear, setConfirmClear] = useState(false);
-	const [aiInstruction, setAIInstruction] = useState("");
-	const [aiWorking, setAIWorking] = useState(false);
-	const [aiSummary, setAISummary] = useState<string | null>(null);
 
 	const handleClearAll = () => {
 		if (!confirmClear) {
@@ -118,21 +113,6 @@ export function MemoryManager({
 			console.warn("[memory] Failed to clear memories:", error);
 		});
 		setConfirmClear(false);
-	};
-
-	const handleAIEdit = async () => {
-		if (!aiInstruction.trim() || aiWorking) return;
-		setAIWorking(true);
-		setAISummary(null);
-		try {
-			const summary = await onAIEdit(aiInstruction.trim());
-			setAISummary(summary);
-			setAIInstruction("");
-		} catch {
-			setAISummary("Failed to process instruction.");
-		} finally {
-			setAIWorking(false);
-		}
 	};
 
 	return (
@@ -158,42 +138,6 @@ export function MemoryManager({
 							/>
 						</svg>
 					</button>
-				</div>
-
-				{/* AI Edit section */}
-				<div className="px-4 pt-3 pb-2 border-b dark:border-gray-700 flex-shrink-0">
-					<div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5">
-						Ask AI to edit memories
-					</div>
-					<div className="flex gap-2">
-						<input
-							type="text"
-							aria-label="AI memory edit instruction"
-							value={aiInstruction}
-							onChange={(e) => setAIInstruction(e.target.value)}
-							onKeyDown={(e) => {
-								if (e.key === "Enter") handleAIEdit();
-							}}
-							placeholder='e.g. "merge duplicates", "clean up"'
-							disabled={aiWorking || memories.length === 0}
-							className="flex-1 px-2.5 py-1.5 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 outline-none focus:ring-1 focus:ring-blue-400 disabled:opacity-50"
-						/>
-						<button
-							type="button"
-							onClick={handleAIEdit}
-							disabled={aiWorking || !aiInstruction.trim() || memories.length === 0}
-							className="px-3 py-1.5 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 flex-shrink-0"
-						>
-							{aiWorking ? (
-								<span className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" />
-							) : (
-								"Go"
-							)}
-						</button>
-					</div>
-					{aiSummary && (
-						<p className="text-xs text-blue-600 dark:text-blue-400 mt-1.5 italic">{aiSummary}</p>
-					)}
 				</div>
 
 				{/* Memory list */}

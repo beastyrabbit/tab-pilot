@@ -428,8 +428,10 @@ export function useOrganize() {
 								`[apply] Fixed group ${fixedGid} is gone, recreating "${suggestion.groupName}"`,
 								e,
 							);
+							const goneGid = fixedGid;
 							fixedGid = await groupTabs(suggestion.tabIds);
 							await updateGroup(fixedGid, { title: suggestion.groupName, color: suggestion.color });
+							await setFixedGroup({ id: goneGid, color: suggestion.color }, false);
 							await setFixedGroup(
 								{ id: fixedGid, title: suggestion.groupName, color: suggestion.color },
 								true,

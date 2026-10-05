@@ -73,8 +73,26 @@ export async function listProxyModels(
 			"This address did not return a model list. Use the EasyCLIProxyAPI API base URL, usually ending in /v1.",
 		);
 	}
-	return (body.data as Array<{ id: string; name?: string }>).map((model) => ({
-		id: model.id,
-		name: model.name || model.id,
-	}));
+	return (body.data as Array<Record<string, unknown> & { id: string; name?: string }>).map(
+		(model) => {
+			const thinkingLevels = pick(model.thinkingLevels, THINKING_LEVELS);
+			const serviceTiers = pick(model.serviceTiers, SERVICE_TIERS);
+			return {
+				id: model.id,
+				name: model.name || model.id,
+				...(thinkingLevels ? { thinkingLevels } : {}),
+				...(serviceTiers ? { serviceTiers } : {}),
+			};
+		},
+	);
+}
+
+const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"] as const;
+const SERVICE_TIERS = ["flex", "default", "priority"] as const;
+
+/** Keeps advertised capability values the settings UI understands; undefined means "not advertised". */
+function pick<T extends string>(value: unknown, allowed: readonly T[]): T[] | undefined {
+	if (!Array.isArray(value)) return undefined;
+	const valid = value.filter((item): item is T => allowed.includes(item as T));
+	return valid.length ? valid : undefined;
 }

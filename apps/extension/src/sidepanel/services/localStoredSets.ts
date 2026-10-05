@@ -8,6 +8,26 @@ async function read(): Promise<StoredTabSet[]> {
 async function write(sets: StoredTabSet[]) {
 	await chrome.storage.local.set({ [KEY]: sets });
 }
+/** Same page, ignoring the fragment and a trailing slash, so variants are not stored twice. */
+function normalizeUrl(raw: string): string {
+	try {
+		const url = new URL(raw);
+		url.hash = "";
+		return url.toString().replace(/\/$/, "");
+	} catch {
+		return raw;
+	}
+}
+
+function uniqueTabs(tabs: StoredTabInput[], seen = new Set<string>()): StoredTabInput[] {
+	return tabs.filter((tab) => {
+		const key = normalizeUrl(tab.originalUrl);
+		if (seen.has(key)) return false;
+		seen.add(key);
+		return true;
+	});
+}
+
 export async function listStoredSets(): Promise<StoredTabSetSummary[]> {
 	return (await read()).map(({ tabs, ...s }) => s);
 }
@@ -19,6 +39,7 @@ export async function createStoredSet(input: {
 	const sets = await read();
 	const now = Date.now();
 	const setId = crypto.randomUUID();
+	input = { ...input, tabs: uniqueTabs(input.tabs) };
 	const set: StoredTabSet = {
 		id: setId,
 		name: input.name,
@@ -27,7 +48,7 @@ export async function createStoredSet(input: {
 			...t,
 			id: crypto.randomUUID(),
 			setId: setId,
-			normalizedUrl: t.originalUrl,
+			normalizedUrl: normalizeUrl(t.originalUrl),
 			order: i,
 			createdAt: new Date(now).toISOString(),
 		})),
@@ -57,13 +78,14 @@ export async function appendStoredTabs(id: string, tabs: StoredTabInput[]) {
 	const sets = await read();
 	const set = sets.find((s) => s.id === id);
 	if (!set) throw new Error("Stored set not found");
+	const added = uniqueTabs(tabs, new Set(set.tabs.map((t) => normalizeUrl(t.originalUrl))));
 	set.tabs = [
 		...set.tabs,
-		...tabs.map((t, i) => ({
+		...added.map((t, i) => ({
 			...t,
 			id: crypto.randomUUID(),
 			setId: id,
-			normalizedUrl: t.originalUrl,
+			normalizedUrl: normalizeUrl(t.originalUrl),
 			order: set.tabs.length + i,
 			createdAt: new Date().toISOString(),
 		})),
