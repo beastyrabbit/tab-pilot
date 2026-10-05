@@ -17,7 +17,7 @@ function downloadRun(run: OrganizeRunLog) {
 	setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function RunDetails({ run }: { run: OrganizeRunLog }) {
+function RunDetails({ run }: Readonly<{ run: OrganizeRunLog }>) {
 	const [revision, setRevision] = useState(-1);
 	const proposals = run.proposals || [];
 	const proposal = proposals[revision < 0 ? proposals.length - 1 : revision];
@@ -57,7 +57,7 @@ function RunDetails({ run }: { run: OrganizeRunLog }) {
 					)}
 					{proposals.length > 0 && (
 						<label className="block">
-							Proposal version
+							Proposal version{" "}
 							<select
 								aria-label="Proposal version"
 								className="mt-1 w-full min-w-0 rounded border bg-white p-1 dark:border-gray-600 dark:bg-gray-800"

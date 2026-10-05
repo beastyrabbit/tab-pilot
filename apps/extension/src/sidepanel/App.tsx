@@ -503,7 +503,7 @@ export function App() {
 			)}
 
 			{/* Main content: either proposal view or current tabs */}
-			{inProposalMode ? (
+			{inProposalMode && (
 				<ProposalView
 					suggestions={suggestions}
 					reasoning={reasoning}
@@ -522,11 +522,13 @@ export function App() {
 					onDismiss={dismiss}
 					fixedGroupIds={fixedGroupIds}
 				/>
-			) : tabsLoading ? (
+			)}
+			{!inProposalMode && tabsLoading && (
 				<div className="text-sm text-gray-400 dark:text-gray-500 text-center py-8">
 					Loading tabs&hellip;
 				</div>
-			) : (
+			)}
+			{!inProposalMode && !tabsLoading && (
 				<TabList
 					tabs={tabs}
 					groups={groups}

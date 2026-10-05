@@ -211,7 +211,7 @@ export function TabList({
 	onToggleFixedGroup,
 	scanProgress,
 	serverOnline = true,
-}: TabListProps) {
+}: Readonly<TabListProps>) {
 	const groupedTabIds = new Set(groups.flatMap((g) => g.tabIds));
 	const ungroupedTabs = tabs.filter((t) => !groupedTabIds.has(t.id));
 

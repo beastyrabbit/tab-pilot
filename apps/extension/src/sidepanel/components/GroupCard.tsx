@@ -33,7 +33,7 @@ export function GroupCard({
 	onToggleFixed,
 	summaryStatuses,
 	children,
-}: GroupCardProps) {
+}: Readonly<GroupCardProps>) {
 	const [collapsedOverride, setCollapsedOverride] = useState<boolean | null>(null);
 	const [editing, setEditing] = useState(false);
 	const [draftTitle, setDraftTitle] = useState<string | null>(null);

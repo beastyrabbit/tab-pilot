@@ -1,6 +1,7 @@
 import type {
 	GroupingSuggestion,
 	MemoryCandidate,
+	PublicSettings,
 	StoredTabSetSuggestion,
 	TabGroupInfo,
 	TabInfo,
@@ -16,6 +17,7 @@ import {
 } from "../services/chromeTabsApi.js";
 import { clientDebug } from "../services/clientDebug.js";
 import { startContentBridge } from "../services/contentBridge.js";
+import { pickDuplicateTabsToClose } from "../services/duplicates.js";
 import { resolveFixedGroupIds, setFixedGroup, syncFixedGroupIds } from "../services/fixedGroups.js";
 import {
 	clearStoredOrganizeRun,
@@ -94,6 +96,99 @@ async function prepareTabContext(tabs: TabInfo[]): Promise<TabInfo[]> {
 	};
 	await Promise.all(Array.from({ length: Math.min(6, queue.length) }, worker));
 	return tabs.map((tab) => context.get(tab.id) ?? tab);
+}
+
+/** Browser state and settings shared by the apply steps. */
+interface ApplyContext {
+	settings: PublicSettings;
+	/** Tabs from the proposal that still exist, with their pre-apply group ids. */
+	currentTabs: TabInfo[];
+	/** Fixed group ids; a recreated fixed group's new id is added. */
+	fixedIds: Set<number>;
+	/** Where each tab should end up, for the run-history outcome check. */
+	expected: Map<number, number>;
+}
+
+/** Re-attach tabs to a fixed group, or recreate it (and keep it fixed) if Chrome deleted it. */
+async function applyFixedSuggestion(
+	suggestion: GroupingSuggestion,
+	groupId: number,
+	ctx: ApplyContext,
+): Promise<void> {
+	console.log(`[apply] Preserving fixed group ${groupId}`);
+	let fixedGid = groupId;
+	try {
+		await groupTabs(suggestion.tabIds, fixedGid);
+	} catch (e) {
+		// Chrome deletes a group once its last tab leaves; recreate it and keep it fixed.
+		console.warn(
+			`[apply] Fixed group ${fixedGid} is gone, recreating "${suggestion.groupName}"`,
+			e,
+		);
+		fixedGid = await groupTabs(suggestion.tabIds);
+		await updateGroup(fixedGid, { title: suggestion.groupName, color: suggestion.color });
+		const group = { title: suggestion.groupName, color: suggestion.color };
+		await setFixedGroup({ id: groupId, ...group }, false);
+		await setFixedGroup({ id: fixedGid, ...group }, true);
+		ctx.fixedIds.add(fixedGid);
+	}
+	for (const id of suggestion.tabIds) ctx.expected.set(id, fixedGid);
+}
+
+/** Put tabs into the suggested existing group when allowed, otherwise into a new group. */
+async function placeSuggestion(suggestion: GroupingSuggestion, ctx: ApplyContext): Promise<number> {
+	const existingId = suggestion.existingGroupId;
+	if (existingId == null) return groupTabs(suggestion.tabIds);
+	// "Do not add to existing groups" still lets a group keep its own current tabs.
+	const onlyCurrentMembers = suggestion.tabIds.every(
+		(id) => ctx.currentTabs.find((tab) => tab.id === id)?.groupId === existingId,
+	);
+	if (!ctx.settings.allowAddToExistingGroups && !onlyCurrentMembers) {
+		return groupTabs(suggestion.tabIds);
+	}
+	try {
+		return await groupTabs(suggestion.tabIds, existingId);
+	} catch (e) {
+		console.warn(
+			`[apply] Existing group ${existingId} unavailable for "${suggestion.groupName}", creating a new group`,
+			e,
+		);
+		return groupTabs(suggestion.tabIds);
+	}
+}
+
+async function applyGroupSuggestion(
+	suggestion: GroupingSuggestion,
+	ctx: ApplyContext,
+): Promise<void> {
+	const gid = await placeSuggestion(suggestion, ctx);
+	for (const id of suggestion.tabIds) ctx.expected.set(id, gid);
+	// Colors are validated in proxyAi.ts. A freshly created group always needs its
+	// title; "no renames" only protects reused groups.
+	const setTitle = gid !== suggestion.existingGroupId || ctx.settings.allowRenameGroups;
+	console.log(`[apply] Group "${suggestion.groupName}" gid=${gid} color="${suggestion.color}"`);
+	try {
+		await updateGroup(gid, {
+			...(setTitle ? { title: suggestion.groupName } : {}),
+			color: suggestion.color,
+		});
+	} catch (e) {
+		console.log(`[apply] updateGroup FAILED for "${suggestion.groupName}": ${String(e)}`);
+		// Fallback: try title-only
+		if (setTitle) await updateGroup(gid, { title: suggestion.groupName }).catch(() => {});
+	}
+}
+
+/** Hard mode: tabs the proposal left ungrouped go into one "Other" group. */
+async function groupRemainingTabs(toApply: GroupingSuggestion[], ctx: ApplyContext): Promise<void> {
+	const assigned = new Set(toApply.flatMap((suggestion) => suggestion.tabIds));
+	const remaining = ctx.currentTabs
+		.filter((tab) => !assigned.has(tab.id) && tab.groupId === -1)
+		.map((tab) => tab.id);
+	if (!remaining.length) return;
+	const gid = await groupTabs(remaining);
+	for (const id of remaining) ctx.expected.set(id, gid);
+	await updateGroup(gid, { title: "Other", color: "grey" });
 }
 
 export function useOrganize() {
@@ -321,16 +416,12 @@ export function useOrganize() {
 				}
 				const settings = await loadSettings();
 				const groups = groupsRef.current;
-				const result = await refineViaProxy(
-					settings,
-					suggestions,
-					tabsRef.current,
-					feedback,
+				const result = await refineViaProxy(settings, suggestions, tabsRef.current, feedback, {
 					groups,
-					await syncFixedGroupIds(),
-					await loadOrganizerPreferences(),
-					{ groupName: targetGroupName, tabId: targetTabId },
-				);
+					fixedGroups: await syncFixedGroupIds(),
+					preferences: await loadOrganizerPreferences(),
+					target: { groupName: targetGroupName, tabId: targetTabId },
+				});
 				if (runLog) {
 					recordProposal(runLog, result.suggestions, "refinement", settings.proxyApiKey);
 					runLog.status = "proposal";
@@ -398,7 +489,10 @@ export function useOrganize() {
 				// Tabs can close while the proposal is on screen; never touch ids that are gone.
 				const liveTabs = await chrome.tabs.query({});
 				const liveTabIds = new Set(liveTabs.map((tab) => tab.id));
-				const lastAccessed = new Map(liveTabs.map((tab) => [tab.id, tab.lastAccessed ?? 0]));
+				const lastAccessed = new Map<number, number>();
+				for (const tab of liveTabs) {
+					if (tab.id !== undefined) lastAccessed.set(tab.id, tab.lastAccessed ?? 0);
+				}
 				const currentTabs = tabsRef.current.filter((tab) => liveTabIds.has(tab.id));
 				const fixedGroupsForApply = await syncFixedGroupIds();
 				const fixedIds = new Set(fixedGroupsForApply.map((group) => group.id));
@@ -409,120 +503,32 @@ export function useOrganize() {
 					if (resetIds.length) await ungroupTabs(resetIds);
 				}
 				// 1. Create/update suggested groups
+				const ctx: ApplyContext = { settings: organizeSettings, currentTabs, fixedIds, expected };
 				for (const proposed of toApply) {
 					const suggestion = {
 						...proposed,
 						tabIds: proposed.tabIds.filter((id) => liveTabIds.has(id)),
 					};
 					if (suggestion.tabIds.length === 0) continue;
-					if (suggestion.existingGroupId != null && fixedIds.has(suggestion.existingGroupId)) {
-						console.log(`[apply] Preserving fixed group ${suggestion.existingGroupId}`);
-						let fixedGid = suggestion.existingGroupId;
-						try {
-							await groupTabs(suggestion.tabIds, fixedGid);
-						} catch (e) {
-							// Chrome deletes a group once its last tab leaves; recreate it and keep it fixed.
-							console.warn(
-								`[apply] Fixed group ${fixedGid} is gone, recreating "${suggestion.groupName}"`,
-								e,
-							);
-							const goneGid = fixedGid;
-							fixedGid = await groupTabs(suggestion.tabIds);
-							await updateGroup(fixedGid, { title: suggestion.groupName, color: suggestion.color });
-							await setFixedGroup(
-								{ id: goneGid, title: suggestion.groupName, color: suggestion.color },
-								false,
-							);
-							await setFixedGroup(
-								{ id: fixedGid, title: suggestion.groupName, color: suggestion.color },
-								true,
-							);
-						}
-						for (const id of suggestion.tabIds) expected.set(id, fixedGid);
-						continue;
-					}
-
-					let gid: number;
-					// "Do not add to existing groups" still lets a group keep its own current tabs.
-					const onlyCurrentMembers = suggestion.tabIds.every(
-						(id) =>
-							currentTabs.find((tab) => tab.id === id)?.groupId === suggestion.existingGroupId,
-					);
-					if (
-						suggestion.existingGroupId != null &&
-						(organizeSettings.allowAddToExistingGroups || onlyCurrentMembers)
-					) {
-						try {
-							gid = await groupTabs(suggestion.tabIds, suggestion.existingGroupId);
-						} catch (e) {
-							console.warn(
-								`[apply] Existing group ${suggestion.existingGroupId} unavailable for "${suggestion.groupName}", creating a new group`,
-								e,
-							);
-							gid = await groupTabs(suggestion.tabIds);
-						}
+					const existingId = suggestion.existingGroupId;
+					if (existingId != null && fixedIds.has(existingId)) {
+						await applyFixedSuggestion(suggestion, existingId, ctx);
 					} else {
-						gid = await groupTabs(suggestion.tabIds);
-					}
-					for (const id of suggestion.tabIds) expected.set(id, gid);
-
-					// Set title + color in one call (colors are validated in proxyAi.ts). A freshly
-					// created group always needs its title; "no renames" only protects reused groups.
-					const freshGroup = gid !== suggestion.existingGroupId;
-					const setTitle = freshGroup || organizeSettings.allowRenameGroups;
-					const logMsg = `Group "${suggestion.groupName}" gid=${gid} color="${suggestion.color}"`;
-					console.log(`[apply] ${logMsg}`);
-					try {
-						await updateGroup(gid, {
-							...(setTitle ? { title: suggestion.groupName } : {}),
-							color: suggestion.color,
-						});
-						console.log(`[apply] updateGroup OK for "${suggestion.groupName}"`);
-					} catch (e) {
-						const err = e instanceof Error ? e.message : String(e);
-						console.log(`[apply] updateGroup FAILED for "${suggestion.groupName}": ${err}`);
-						// Fallback: try title-only
-						try {
-							if (setTitle) await updateGroup(gid, { title: suggestion.groupName });
-						} catch {}
-					}
-
-					// Verify the color was actually set
-					try {
-						const check = await chrome.tabGroups.get(gid);
-						console.log(`[apply] Verify gid=${gid}: title="${check.title}" color="${check.color}"`);
-					} catch {}
-				}
-				if (organizeSettings.groupingMode === "hard") {
-					const assigned = new Set(toApply.flatMap((suggestion) => suggestion.tabIds));
-					const remaining = currentTabs
-						.filter((tab) => !assigned.has(tab.id) && tab.groupId === -1)
-						.map((tab) => tab.id);
-					if (remaining.length) {
-						const gid = await groupTabs(remaining);
-						for (const id of remaining) expected.set(id, gid);
-						await updateGroup(gid, { title: "Other", color: "grey" });
+						await applyGroupSuggestion(suggestion, ctx);
 					}
 				}
-				const duplicateSettings = organizeSettings;
-				if (duplicateSettings.closeDuplicateTabs) {
-					const byUrl = new Map<string, TabInfo[]>();
-					for (const tab of currentTabs) {
-						const key = tab.url.trim();
-						byUrl.set(key, [...(byUrl.get(key) ?? []), tab]);
-					}
-					const duplicateIds = [...byUrl.values()]
-						.filter((items) => items.length > 1)
-						.flatMap((items) =>
-							// Oldest first by last use, so "keep newest" keeps the most recently used copy.
-							[...items]
-								.sort((a, b) => (lastAccessed.get(a.id) ?? 0) - (lastAccessed.get(b.id) ?? 0))
-								.slice(
-									duplicateSettings.keepNewestDuplicate ? 0 : 1,
-									duplicateSettings.keepNewestDuplicate ? -1 : undefined,
-								)
-								.map((tab) => tab.id),
-						);
+				if (organizeSettings.groupingMode === "hard") await groupRemainingTabs(toApply, ctx);
+				if (organizeSettings.closeDuplicateTabs) {
+					// A tab ends in a fixed group if apply put it there or it was already in one.
+					const liveGroupOf = new Map(liveTabs.map((tab) => [tab.id, tab.groupId]));
+					const inFixedGroup = (id: number) =>
+						fixedIds.has(expected.get(id) ?? liveGroupOf.get(id) ?? -1);
+					const duplicateIds = pickDuplicateTabsToClose(
+						currentTabs,
+						lastAccessed,
+						organizeSettings.keepNewestDuplicate,
+						inFixedGroup,
+					);
 					if (duplicateIds.length) {
 						await closeTabs(duplicateIds);
 						closedDuplicateIds.push(...duplicateIds);

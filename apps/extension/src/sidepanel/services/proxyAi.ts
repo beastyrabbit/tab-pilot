@@ -107,10 +107,10 @@ async function requestCompletion(
 	} | null;
 	const content = body?.choices?.[0]?.message?.content;
 	if (!content) throw new RetryableError("CLIProxyAPI returned no model content");
-	return content
-		.replace(/^```(?:json)?\s*/i, "")
-		.replace(/\s*```$/, "")
-		.trim();
+	// Strip an optional markdown fence without backtracking-prone regexes.
+	let text = content.trim().replace(/^```(?:json)?/i, "");
+	if (text.endsWith("```")) text = text.slice(0, -3);
+	return text.trim();
 }
 
 async function requestJson(
@@ -241,7 +241,19 @@ const RULE_MATCH: Record<UserRule["matchType"], string> = {
 	regex: "URL or title matches the regex",
 };
 
+function coverageRule(settings: PublicSettings): string {
+	if (settings.groupingMode === "hard") return "Assign every tab to a group.";
+	if (settings.keepUngroupedTabs) {
+		return "Leave a tab out only when no group is a reasonably clear fit. Never leave out a tab with an obvious match.";
+	}
+	return "Group as many tabs as reasonably possible.";
+}
+
+const bulletList = (items: string[]) => items.map((item) => `- ${item}`).join("\n");
+
 function organizationRules(settings: PublicSettings, preferences: OrganizerPreferences): string {
+	const titleLength = TITLE_LENGTH[settings.groupTitleLength] ?? TITLE_LENGTH.medium;
+	const titleTopic = settings.allowComplexTitles ? "" : ", one clear topic per title";
 	const rules = [
 		"Return the complete target layout, not only changes: list every group that should exist afterwards, existing or new, with all of its tabs.",
 		"Assign each tab id to at most one group.",
@@ -256,12 +268,8 @@ function organizationRules(settings: PublicSettings, preferences: OrganizerPrefe
 			? "You may give a reused non-fixed group a clearer title."
 			: "When reusing an existing group, keep its exact title.",
 		"Groups marked fixed are protected: keep their title, color and current tabs, never create a second group for the same topic, and add a tab only when it clearly belongs.",
-		settings.groupingMode === "hard"
-			? "Assign every tab to a group."
-			: settings.keepUngroupedTabs
-				? "Leave a tab out only when no group is a reasonably clear fit. Never leave out a tab with an obvious match."
-				: "Group as many tabs as reasonably possible.",
-		`New group titles: ${TITLE_LENGTH[settings.groupTitleLength] ?? TITLE_LENGTH.medium}${settings.allowComplexTitles ? "" : ", one clear topic per title"}.`,
+		coverageRule(settings),
+		`New group titles: ${titleLength}${titleTopic}.`,
 		`Colors: one of ${GROUP_COLORS.join(", ")}. Prefer different colors for unrelated groups.`,
 		"confidence is a number from 0 to 1 for how coherent the group is.",
 		...preferences.rules.map(
@@ -269,13 +277,13 @@ function organizationRules(settings: PublicSettings, preferences: OrganizerPrefe
 				`Tabs whose ${RULE_MATCH[rule.matchType] ?? "URL contains"} "${rule.pattern}" belong in "${rule.targetGroup}".`,
 		),
 	];
-	const sections = [`Rules:\n${rules.map((rule) => `- ${rule}`).join("\n")}`];
+	const sections = [`Rules:\n${bulletList(rules)}`];
 	if (settings.generalPrompt?.trim()) {
 		sections.push(`The user's standing preferences:\n${settings.generalPrompt.trim()}`);
 	}
 	if (preferences.memories.length) {
 		sections.push(
-			`Learned from the user's earlier corrections:\n${preferences.memories.map((memory) => `- ${memory}`).join("\n")}`,
+			`Learned from the user's earlier corrections:\n${bulletList(preferences.memories)}`,
 		);
 	}
 	return sections.join("\n\n");
@@ -468,22 +476,29 @@ Return {"suggestions":[{"groupName","color","tabIds","existingGroupId","confiden
 	};
 }
 
+export interface RefineContext {
+	groups?: TabGroupInfo[];
+	fixedGroups?: FixedGroup[];
+	preferences?: OrganizerPreferences;
+	/** The proposed group or tab the user's feedback is about, if any. */
+	target?: { groupName?: string; tabId?: number };
+}
+
 export async function refineViaProxy(
 	settings: PublicSettings,
 	suggestions: GroupingSuggestion[],
 	tabs: TabInfo[],
 	feedback: string,
-	groups: TabGroupInfo[] = [],
-	fixedGroups: FixedGroup[] = [],
-	preferences: OrganizerPreferences = NO_PREFERENCES,
-	target: { groupName?: string; tabId?: number } = {},
+	context: RefineContext = {},
 ): Promise<RefineResponse> {
-	const focus = [
+	const { groups = [], fixedGroups = [], preferences = NO_PREFERENCES, target = {} } = context;
+	const feedbackLines = [
+		`Feedback: ${feedback}`,
 		target.groupName ? `The feedback is about the proposed group "${target.groupName}".` : "",
-		target.tabId != null ? `The feedback is about tab ${target.tabId}.` : "",
+		target.tabId == null ? "" : `The feedback is about tab ${target.tabId}.`,
 	]
 		.filter(Boolean)
-		.join(" ");
+		.join("\n");
 	const proposal = suggestions.map((suggestion) => ({
 		groupName: suggestion.groupName,
 		color: suggestion.color,
@@ -494,7 +509,7 @@ export async function refineViaProxy(
 
 ${organizationRules(settings, preferences)}
 
-Feedback: ${feedback}${focus ? `\n${focus}` : ""}
+${feedbackLines}
 
 If the feedback reveals a lasting preference for future runs, add up to 3 short memoryCandidates; otherwise return an empty list.
 

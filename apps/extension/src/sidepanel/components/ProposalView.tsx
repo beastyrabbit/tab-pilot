@@ -423,7 +423,7 @@ function ProposalGroup({
 	dispatch,
 	onRefine,
 	fixedGroupIds,
-}: {
+}: Readonly<{
 	groupKey: ProposalGroupKey;
 	suggestion: GroupingSuggestion;
 	tabsById: Map<number, TabInfo>;
@@ -433,7 +433,7 @@ function ProposalGroup({
 	dispatch: Dispatch<ProposalAction>;
 	onRefine: (feedback: string, targetGroupName?: string, targetTabId?: number) => void;
 	fixedGroupIds?: Set<number>;
-}) {
+}>) {
 	const isExpanded = state.expandedGroup === groupKey;
 
 	return (
@@ -587,7 +587,7 @@ export function ProposalView({
 	onStoreSuggestion,
 	onDismiss,
 	fixedGroupIds,
-}: ProposalViewProps) {
+}: Readonly<ProposalViewProps>) {
 	const [state, dispatch] = useReducer(proposalReducer, undefined, createProposalState);
 	const tabsById = useMemo(() => new Map(tabs.map((tab) => [tab.id, tab])), [tabs]);
 	const ungroupedTabs = useMemo(() => {

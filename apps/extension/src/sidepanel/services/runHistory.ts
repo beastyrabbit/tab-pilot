@@ -90,7 +90,7 @@ export function snapshotTabs(tabs: TabInfo[], secret = ""): RunTab[] {
 			title: logText(tab.title, secret),
 			domain,
 			groupId: tab.groupId,
-			context: tab.pageText ? "page-excerpt" : tab.metaDescription ? "metadata" : "title-url",
+			context: contextKind(tab),
 		};
 	});
 }
@@ -108,38 +108,62 @@ export function snapshotGroups(
 	}));
 }
 
+function contextKind(tab: TabInfo): RunTab["context"] {
+	if (tab.pageText) return "page-excerpt";
+	if (tab.metaDescription) return "metadata";
+	return "title-url";
+}
+
+/** Warnings about the proposal itself: unknown or repeated tabs, unknown groups, renamed favorites. */
+function suggestionWarnings(
+	log: OrganizeRunLog,
+	suggestion: GroupingSuggestion,
+	assigned: Map<number, number | undefined>,
+	secret: string,
+): string[] {
+	const known = new Set(log.tabs?.map((tab) => tab.id));
+	const warnings: string[] = [];
+	for (const id of suggestion.tabIds) {
+		if (!known.has(id)) warnings.push(`Unknown tab ${id} in proposal.`);
+		if (assigned.has(id)) warnings.push(`Tab ${id} assigned more than once.`);
+		assigned.set(id, suggestion.existingGroupId);
+	}
+	const target = log.groups?.find((group) => group.id === suggestion.existingGroupId);
+	if (suggestion.existingGroupId != null && !target)
+		warnings.push(`Unknown target group ${suggestion.existingGroupId}.`);
+	if (target?.fixed && target.name !== logText(suggestion.groupName, secret))
+		warnings.push(`Favorite ${target.name} would be renamed.`);
+	return warnings;
+}
+
+/** Tabs the proposal would move out of a favorite (fixed) group. */
+function leavingFavoriteWarnings(
+	log: OrganizeRunLog,
+	assigned: Map<number, number | undefined>,
+): string[] {
+	const fixedIds = new Set(log.groups?.filter((group) => group.fixed).map((group) => group.id));
+	return (log.tabs || [])
+		.filter(
+			(tab) =>
+				fixedIds.has(tab.groupId) && assigned.has(tab.id) && assigned.get(tab.id) !== tab.groupId,
+		)
+		.map((tab) => `Tab ${tab.id} would leave its favorite group.`);
+}
+
 export function recordProposal(
 	log: OrganizeRunLog,
 	suggestions: GroupingSuggestion[],
 	kind: RunProposal["kind"],
 	secret = "",
 ): void {
-	const known = new Set(log.tabs?.map((tab) => tab.id));
 	const assigned = new Map<number, number | undefined>();
-	const warnings: string[] = [];
-	for (const suggestion of suggestions) {
-		for (const id of suggestion.tabIds) {
-			if (!known.has(id)) warnings.push(`Unknown tab ${id} in proposal.`);
-			if (assigned.has(id)) warnings.push(`Tab ${id} assigned more than once.`);
-			assigned.set(id, suggestion.existingGroupId);
-		}
-		const target = log.groups?.find((group) => group.id === suggestion.existingGroupId);
-		if (suggestion.existingGroupId != null && !target)
-			warnings.push(`Unknown target group ${suggestion.existingGroupId}.`);
-		if (target?.fixed && target.name !== logText(suggestion.groupName, secret))
-			warnings.push(`Favorite ${target.name} would be renamed.`);
-	}
+	const warnings = suggestions.flatMap((suggestion) =>
+		suggestionWarnings(log, suggestion, assigned, secret),
+	);
 	const unassignedTabIds = (log.tabs || [])
 		.filter((tab) => !assigned.has(tab.id))
 		.map((tab) => tab.id);
-	for (const tab of log.tabs || []) {
-		if (
-			log.groups?.some((group) => group.id === tab.groupId && group.fixed) &&
-			assigned.has(tab.id) &&
-			assigned.get(tab.id) !== tab.groupId
-		)
-			warnings.push(`Tab ${tab.id} would leave its favorite group.`);
-	}
+	warnings.push(...leavingFavoriteWarnings(log, assigned));
 	if (log.settings?.groupingMode === "hard" && unassignedTabIds.length)
 		warnings.push(`Hard mode: ${unassignedTabIds.length} tabs missing from proposal.`);
 	const proposal: RunProposal = {

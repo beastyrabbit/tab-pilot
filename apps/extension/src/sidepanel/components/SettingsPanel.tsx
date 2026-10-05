@@ -40,17 +40,29 @@ const TITLE_LENGTH_OPTIONS: Array<{ value: GroupTitleLength; label: string }> = 
 
 const DEFAULT_MODEL = "gpt-5.3-codex";
 
+// Checkbox row: box in the first column, title and hint stacked in the second.
+const CHECKBOX_ROW =
+	"grid cursor-pointer grid-cols-[auto_1fr] items-start gap-x-2 rounded-lg p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800";
+const CHECKBOX = "row-span-2 mt-0.5 size-4 accent-blue-600";
+const CHECKBOX_TITLE = "text-xs font-medium text-gray-700 dark:text-gray-200";
+const CHECKBOX_HINT = "text-[10px] leading-4 text-gray-500 dark:text-gray-400";
+
+const CONNECTION_TONE: Record<string, string> = {
+	error: "text-red-600 dark:text-red-400",
+	success: "text-green-700 dark:text-green-400",
+};
+
 function ChoiceMenu<T extends string>({
 	id,
 	value,
 	options,
 	onChange,
-}: {
+}: Readonly<{
 	id: string;
 	value: T;
 	options: Array<{ value: T; label: string }>;
 	onChange: (value: T) => void;
-}) {
+}>) {
 	const [open, setOpen] = useState(false);
 	const buttonRef = useRef<HTMLButtonElement>(null);
 	const selected = options.find((option) => option.value === value);
@@ -209,7 +221,7 @@ export function SettingsPanel({
 	onToggleTestMode,
 	onUpdate,
 	onClose,
-}: SettingsPanelProps) {
+}: Readonly<SettingsPanelProps>) {
 	const [form, dispatch] = useReducer(settingsFormReducer, settings, createSettingsFormState);
 	const [connection, setConnection] = useState({
 		status: "idle",
@@ -239,10 +251,13 @@ export function SettingsPanel({
 			dispatch({ type: "proxyUrl", value: proxyBaseUrl(form) });
 			if (models.length && !models.some((model) => model.id === form.model))
 				dispatch({ type: "model", value: models[0].id });
+			const keyNote = form.proxyApiKey
+				? "The proxy accepted your key."
+				: "Model discovery works without a key.";
 			setConnection({
 				status: models.length ? "success" : "empty",
 				message: models.length
-					? `Connected. ${models.length} models available. ${form.proxyApiKey ? "The proxy accepted your key." : "Model discovery works without a key."}`
+					? `Connected. ${models.length} models available. ${keyNote}`
 					: "The proxy responded, but returned no models. Connect your Codex account in EasyCLIProxyAPI, then check again.",
 			});
 		} catch (error) {
@@ -340,7 +355,10 @@ export function SettingsPanel({
 								stay protected.
 							</p>
 						</div>
-						<label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+						<label
+							htmlFor="grouping-mode"
+							className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400"
+						>
 							Grouping mode
 						</label>
 						<ChoiceMenu
@@ -382,26 +400,17 @@ export function SettingsPanel({
 									],
 								] as const
 							).map(([key, title, hint]) => (
-								<label
-									key={key}
-									className="flex cursor-pointer items-start gap-2 rounded-lg p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800"
-								>
+								<label key={key} className={CHECKBOX_ROW}>
 									<input
 										type="checkbox"
 										checked={form[key]}
 										onChange={(event) =>
 											dispatch({ type: "boolean", key, value: event.target.checked })
 										}
-										className="mt-0.5 size-4 accent-blue-600"
+										className={CHECKBOX}
 									/>
-									<span>
-										<span className="block text-xs font-medium text-gray-700 dark:text-gray-200">
-											{title}
-										</span>
-										<span className="block text-[10px] leading-4 text-gray-500 dark:text-gray-400">
-											{hint}
-										</span>
-									</span>
+									<span className={CHECKBOX_TITLE}>{title}</span>
+									<span className={CHECKBOX_HINT}>{hint}</span>
 								</label>
 							))}
 						</div>
@@ -414,7 +423,7 @@ export function SettingsPanel({
 						<p className="mt-0.5 text-[11px] leading-4 text-gray-500 dark:text-gray-400">
 							Duplicates are never closed unless you explicitly enable it.
 						</p>
-						<label className="mt-3 flex cursor-pointer items-start gap-2 rounded-lg p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800">
+						<label className={`mt-3 ${CHECKBOX_ROW}`}>
 							<input
 								type="checkbox"
 								checked={form.closeDuplicateTabs}
@@ -425,19 +434,13 @@ export function SettingsPanel({
 										value: event.target.checked,
 									})
 								}
-								className="mt-0.5 size-4 accent-blue-600"
+								className={CHECKBOX}
 							/>
-							<span>
-								<span className="block text-xs font-medium text-gray-700 dark:text-gray-200">
-									Close duplicate tabs while organizing
-								</span>
-								<span className="block text-[10px] leading-4 text-gray-500 dark:text-gray-400">
-									Only exact URL duplicates are candidates.
-								</span>
-							</span>
+							<span className={CHECKBOX_TITLE}>Close duplicate tabs while organizing</span>
+							<span className={CHECKBOX_HINT}>Only exact URL duplicates are candidates.</span>
 						</label>
 						{form.closeDuplicateTabs && (
-							<label className="flex cursor-pointer items-start gap-2 rounded-lg p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800">
+							<label className={CHECKBOX_ROW}>
 								<input
 									type="checkbox"
 									checked={form.keepNewestDuplicate}
@@ -448,15 +451,11 @@ export function SettingsPanel({
 											value: event.target.checked,
 										})
 									}
-									className="mt-0.5 size-4 accent-blue-600"
+									className={CHECKBOX}
 								/>
-								<span>
-									<span className="block text-xs font-medium text-gray-700 dark:text-gray-200">
-										Keep the newest tab
-									</span>
-									<span className="block text-[10px] leading-4 text-gray-500 dark:text-gray-400">
-										Otherwise the first open copy is kept.
-									</span>
+								<span className={CHECKBOX_TITLE}>Keep the most recently used tab</span>
+								<span className={CHECKBOX_HINT}>
+									Otherwise the least recently used copy is kept.
 								</span>
 							</label>
 						)}
@@ -496,7 +495,7 @@ export function SettingsPanel({
 						<p
 							role="status"
 							aria-live="polite"
-							className={`text-xs break-words ${connection.status === "error" ? "text-red-600 dark:text-red-400" : connection.status === "success" ? "text-green-700 dark:text-green-400" : "text-gray-500 dark:text-gray-400"}`}
+							className={`text-xs break-words ${CONNECTION_TONE[connection.status] ?? "text-gray-500 dark:text-gray-400"}`}
 						>
 							{connection.message}
 						</p>
@@ -532,12 +531,6 @@ export function SettingsPanel({
 							<fieldset
 								id="model-choices"
 								aria-label="Available models"
-								onKeyDown={(event) => {
-									if (event.key === "Escape") {
-										setModelOpen(false);
-										modelButton.current?.focus();
-									}
-								}}
 								className="mt-1 w-full min-w-0 max-h-48 overflow-y-auto rounded-lg border dark:border-gray-600"
 							>
 								{form.models.map((model) => (
@@ -545,6 +538,12 @@ export function SettingsPanel({
 										type="button"
 										key={model.id}
 										aria-pressed={model.id === form.model}
+										onKeyDown={(event) => {
+											if (event.key === "Escape") {
+												setModelOpen(false);
+												modelButton.current?.focus();
+											}
+										}}
 										onClick={() => {
 											dispatch({ type: "model", value: model.id });
 											setModelOpen(false);

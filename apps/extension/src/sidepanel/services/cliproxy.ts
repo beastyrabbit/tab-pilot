@@ -18,7 +18,9 @@ export function proxyBaseUrl(settings: Pick<PublicSettings, "proxyUrl">): string
 			"Use an HTTP or HTTPS URL without login details, query parameters or fragments.",
 		);
 	}
-	url.pathname = url.pathname.replace(/\/+$/, "") || "/v1";
+	let path = url.pathname;
+	while (path.endsWith("/")) path = path.slice(0, -1);
+	url.pathname = path || "/v1";
 	return url.toString().replace(/\/$/, "");
 }
 

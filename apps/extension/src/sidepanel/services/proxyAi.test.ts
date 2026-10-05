@@ -272,10 +272,7 @@ describe("refineViaProxy", () => {
 			],
 			tabs,
 			"move example into video",
-			groups,
-			fixed,
-			undefined,
-			{ groupName: "Streaming" },
+			{ groups, fixedGroups: fixed, target: { groupName: "Streaming" } },
 		);
 		expect(result.suggestions).toContainEqual(
 			expect.objectContaining({ groupName: "Streaming", existingGroupId: 50, tabIds: [1] }),
