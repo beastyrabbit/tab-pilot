@@ -85,6 +85,8 @@ async function requestCompletion(
 				],
 			}),
 			signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+			// Never resend tab data to wherever a proxy redirects.
+			redirect: "error",
 		});
 	} catch (error) {
 		if (error instanceof Error && error.name === "TimeoutError") {

@@ -78,6 +78,7 @@ describe("organizeViaProxy", () => {
 		expect(body.reasoning_effort).toBe("low");
 		expect(body.temperature).toBeUndefined();
 		expect(body.response_format.type).toBe("json_schema");
+		expect(fetch.mock.calls[0][1].redirect).toBe("error");
 		expect(prompt).not.toContain("data:image");
 		expect(prompt).not.toContain("ref=abc");
 		expect(prompt).toContain('"url":"twitch.tv/somechannel"');

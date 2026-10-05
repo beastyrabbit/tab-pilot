@@ -23,6 +23,7 @@ export function useServerHealth() {
 			const response = await fetch(`${url}/models`, {
 				headers: key ? { Authorization: `Bearer ${key}` } : undefined,
 				signal: AbortSignal.timeout(5_000),
+				redirect: "error",
 			});
 			if (!response.ok) throw new Error(`Proxy returned ${response.status}`);
 			setStatus("online");
