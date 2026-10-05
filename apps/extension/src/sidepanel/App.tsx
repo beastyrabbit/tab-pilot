@@ -321,7 +321,7 @@ export function App() {
 	const [fixedGroupIds, setFixedGroupIds] = useState<Set<number>>(new Set());
 
 	useEffect(() => {
-		void syncFixedGroupIds(groups)
+		void syncFixedGroupIds()
 			.then(() => resolveFixedGroupIds(groups))
 			.then(setFixedGroupIds);
 	}, [groups]);
@@ -374,11 +374,7 @@ export function App() {
 	};
 
 	const handleToggleFixedGroup = async (group: TabGroupInfo, fixed: boolean) => {
-		const next = await setFixedGroup(
-			group,
-			fixed,
-			groups.map((item) => item.id),
-		);
+		const next = await setFixedGroup(group, fixed);
 		setFixedGroupIds(new Set(next.map((item) => item.id)));
 	};
 

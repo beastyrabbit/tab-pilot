@@ -12,24 +12,26 @@ export async function getFixedGroups(): Promise<FixedGroup[]> {
 	return Array.isArray(stored[FIXED_GROUPS_KEY]) ? (stored[FIXED_GROUPS_KEY] as FixedGroup[]) : [];
 }
 
+/** Live groups in every window; fixed records for other windows must not look stale. */
+async function liveGroups(): Promise<Array<{ id: number; title?: string; color: string }>> {
+	return chrome.tabGroups.query({});
+}
+
 /**
- * Pass the live group ids when unfixing: stale records with the same title and
- * color (left over from before a restart) are dropped too, so a later sync
- * cannot re-fix the group the user just unfixed.
+ * Unfixing also drops stale records (group no longer exists in any window)
+ * with the same title and color, so a later sync cannot re-fix the group.
  */
 export async function setFixedGroup(
 	group: { id: number; title?: string; color: string },
 	fixed: boolean,
-	liveGroupIds: number[] = [],
 ): Promise<FixedGroup[]> {
 	const groups = await getFixedGroups();
 	const title = group.title || "Untitled";
+	const liveIds = fixed ? [] : (await liveGroups()).map((live) => live.id);
 	const next = groups.filter(
 		(item) =>
 			item.id !== group.id &&
-			(fixed ||
-				liveGroupIds.includes(item.id) ||
-				!(item.title === title && item.color === group.color)),
+			(fixed || liveIds.includes(item.id) || !(item.title === title && item.color === group.color)),
 	);
 	if (fixed)
 		next.push({
@@ -45,20 +47,18 @@ export async function setFixedGroup(
 /**
  * Chrome assigns new group ids after a restart, so stored ids go stale. A
  * stale entry moves to the live group with the same title and color, but only
- * when exactly one unclaimed live group matches; the current id is persisted
- * so later steps (like resetting non-fixed groups) see it.
+ * when exactly one unclaimed live group (in any window) matches; the current
+ * id is persisted so later steps (like resetting non-fixed groups) see it.
  */
-export async function syncFixedGroupIds(
-	liveGroups: Array<{ id: number; title?: string; color: string }>,
-): Promise<FixedGroup[]> {
-	const stored = await getFixedGroups();
+export async function syncFixedGroupIds(): Promise<FixedGroup[]> {
+	const [stored, live] = await Promise.all([getFixedGroups(), liveGroups()]);
 	const claimed = new Set(
-		stored.filter((fixed) => liveGroups.some((group) => group.id === fixed.id)).map((f) => f.id),
+		stored.filter((fixed) => live.some((group) => group.id === fixed.id)).map((f) => f.id),
 	);
 	let changed = false;
 	const synced = stored.map((fixed) => {
 		if (claimed.has(fixed.id)) return fixed;
-		const matches = liveGroups.filter(
+		const matches = live.filter(
 			(group) =>
 				!claimed.has(group.id) &&
 				(group.title || "Untitled") === fixed.title &&

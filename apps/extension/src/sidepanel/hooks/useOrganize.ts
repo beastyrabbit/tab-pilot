@@ -255,7 +255,7 @@ export function useOrganize() {
 				const settings = await loadSettings();
 				runLog.settings = logSettings(settings);
 				groupsRef.current = groups;
-				const fixedGroups = await syncFixedGroupIds(groups);
+				const fixedGroups = await syncFixedGroupIds();
 				const resolvedIds = await resolveFixedGroupIds(groups);
 				runLog.tabs = snapshotTabs(tabs, settings.proxyApiKey);
 				runLog.groups = snapshotGroups(groups, resolvedIds, settings.proxyApiKey);
@@ -327,7 +327,7 @@ export function useOrganize() {
 					tabsRef.current,
 					feedback,
 					groups,
-					await syncFixedGroupIds(groups),
+					await syncFixedGroupIds(),
 					await loadOrganizerPreferences(),
 					{ groupName: targetGroupName, tabId: targetTabId },
 				);
@@ -400,9 +400,7 @@ export function useOrganize() {
 				const liveTabIds = new Set(liveTabs.map((tab) => tab.id));
 				const lastAccessed = new Map(liveTabs.map((tab) => [tab.id, tab.lastAccessed ?? 0]));
 				const currentTabs = tabsRef.current.filter((tab) => liveTabIds.has(tab.id));
-				const fixedGroupsForApply = await syncFixedGroupIds(
-					await chrome.tabGroups.query({ windowId: chrome.windows.WINDOW_ID_CURRENT }),
-				);
+				const fixedGroupsForApply = await syncFixedGroupIds();
 				const fixedIds = new Set(fixedGroupsForApply.map((group) => group.id));
 				if (!organizeSettings.preserveExistingGroups) {
 					const resetIds = currentTabs
@@ -431,11 +429,9 @@ export function useOrganize() {
 							const goneGid = fixedGid;
 							fixedGid = await groupTabs(suggestion.tabIds);
 							await updateGroup(fixedGid, { title: suggestion.groupName, color: suggestion.color });
-							const liveGroupIds = (await chrome.tabGroups.query({})).map((group) => group.id);
 							await setFixedGroup(
 								{ id: goneGid, title: suggestion.groupName, color: suggestion.color },
 								false,
-								liveGroupIds,
 							);
 							await setFixedGroup(
 								{ id: fixedGid, title: suggestion.groupName, color: suggestion.color },
