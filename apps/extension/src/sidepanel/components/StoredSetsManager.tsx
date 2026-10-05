@@ -1,7 +1,7 @@
 import type { StoredTabSetSummary } from "@tab-orga/shared";
 import { useCallback, useEffect, useState } from "react";
 import { restoreStoredTabSet } from "../services/chromeTabsApi.js";
-import { serverApi } from "../services/serverApi.js";
+import { deleteStoredSet, getStoredSet, listStoredSets } from "../services/localStoredSets.js";
 
 interface StoredSetsManagerProps {
 	onClose: () => void;
@@ -18,8 +18,7 @@ export function StoredSetsManager({ onClose, onRestored }: StoredSetsManagerProp
 		setLoading(true);
 		setError(null);
 		try {
-			const result = await serverApi.listStoredSets();
-			setSets(result.sets);
+			setSets(await listStoredSets());
 		} catch (loadError) {
 			setError(loadError instanceof Error ? loadError.message : "Failed to load stored sets");
 		} finally {
@@ -35,7 +34,8 @@ export function StoredSetsManager({ onClose, onRestored }: StoredSetsManagerProp
 		setWorkingId(id);
 		setError(null);
 		try {
-			const { set } = await serverApi.restoreStoredSet(id);
+			const set = await getStoredSet(id);
+			if (!set) throw new Error("Stored set not found");
 			await restoreStoredTabSet(set);
 			onRestored();
 			onClose();
@@ -51,7 +51,7 @@ export function StoredSetsManager({ onClose, onRestored }: StoredSetsManagerProp
 		setWorkingId(id);
 		setError(null);
 		try {
-			await serverApi.deleteStoredSet(id);
+			await deleteStoredSet(id);
 			await refresh();
 		} catch (deleteError) {
 			setError(deleteError instanceof Error ? deleteError.message : "Failed to delete set");

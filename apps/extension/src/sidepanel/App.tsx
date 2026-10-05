@@ -25,8 +25,12 @@ import {
 	ungroupTabs,
 	updateGroup,
 } from "./services/chromeTabsApi.js";
+import { resolveFixedGroupIds, setFixedGroup, syncFixedGroupIds } from "./services/fixedGroups.js";
 import type { ScanProgress } from "./services/screenshotCache.js";
-import { type SummaryAvailability, serverApi } from "./services/serverApi.js";
+
+type SummaryAvailability = { stage1Summary?: string; stage2Summary?: string };
+
+import { appendStoredTabs, createStoredSet } from "./services/localStoredSets.js";
 
 type Panel = "settings" | "memory" | "stored" | null;
 
@@ -217,12 +221,12 @@ function StatusBanners({
 		<>
 			{status === "offline" && (
 				<div className="bg-red-50 border border-red-200 rounded-lg p-2.5 mb-3 text-red-700 text-xs dark:bg-red-900/30 dark:border-red-800 dark:text-red-400">
-					Server offline. Run <code className="font-mono">pnpm dev:server</code>
+					EasyCLIProxyAPI is offline. Start it locally and complete Codex OAuth.
 				</div>
 			)}
 			{status === "online" && !codexConnected && (
 				<div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 mb-3 text-amber-700 text-xs dark:bg-amber-900/30 dark:border-amber-800 dark:text-amber-400">
-					Pi Codex auth missing. Run <code className="font-mono">pnpm pi:login</code>
+					EasyCLIProxyAPI is offline. Start it locally and complete Codex OAuth.
 				</div>
 			)}
 			{error && (
@@ -308,13 +312,19 @@ export function App() {
 		remove: removeMemory,
 		clearAll: clearMemories,
 		add: addMemory,
-		aiEdit: aiEditMemories,
 		refresh: refreshMemories,
 	} = useMemory();
 	const { testMode, toggle: toggleTestMode } = useTestMode();
 	const [activePanel, setActivePanel] = useState<Panel>(null);
 	const [instruction, setInstruction] = useState("");
 	const [confirmUngroupAll, setConfirmUngroupAll] = useState(false);
+	const [fixedGroupIds, setFixedGroupIds] = useState<Set<number>>(new Set());
+
+	useEffect(() => {
+		void syncFixedGroupIds()
+			.then(() => resolveFixedGroupIds(groups))
+			.then(setFixedGroupIds);
+	}, [groups]);
 
 	useEffect(() => {
 		if (status !== "online") return;
@@ -348,17 +358,24 @@ export function App() {
 	};
 
 	const handleRenameGroup = async (groupId: number, title: string) => {
+		if (fixedGroupIds.has(groupId)) return;
 		await updateGroup(groupId, { title });
 		refresh();
 	};
 
 	const handleDeleteGroup = async (groupId: number) => {
+		if (fixedGroupIds.has(groupId)) return;
 		const group = groups.find((g) => g.id === groupId);
 		if (group) {
 			await ungroupTabs(group.tabIds);
 			await collapseAndReorderGroups();
 			refresh();
 		}
+	};
+
+	const handleToggleFixedGroup = async (group: TabGroupInfo, fixed: boolean) => {
+		const next = await setFixedGroup(group, fixed);
+		setFixedGroupIds(new Set(next.map((item) => item.id)));
 	};
 
 	const handleMoveTab = async (tabId: number, groupId: number) => {
@@ -374,7 +391,9 @@ export function App() {
 	};
 
 	const handleUngroupAllGroups = async () => {
-		const allGroupedTabIds = groups.flatMap((g) => g.tabIds);
+		const allGroupedTabIds = groups
+			.filter((group) => !fixedGroupIds.has(group.id))
+			.flatMap((group) => group.tabIds);
 		if (allGroupedTabIds.length > 0) {
 			await ungroupTabs(allGroupedTabIds);
 			refresh();
@@ -394,24 +413,30 @@ export function App() {
 	const handleStoreGroup = async (group: TabGroupInfo) => {
 		const groupTabs = tabs.filter((tab) => group.tabIds.includes(tab.id));
 		if (groupTabs.length === 0) return;
-		const availability = await serverApi.lookupSummaryAvailability(groupTabs.map((tab) => tab.url));
+		const availability: Record<string, SummaryAvailability> = {};
 		const storedTabs = await buildStoredTabInputs(groupTabs, availability);
 		if (storedTabs.length === 0) {
 			window.alert("This group has no restorable http(s) tabs to store.");
 			return;
 		}
-		await serverApi.createStoredSet({
+		await createStoredSet({
 			name: group.title || "Stored Tabs",
 			color: group.color,
 			tabs: storedTabs,
 		});
-		await closeTabs(groupTabs.map((tab) => tab.id));
+		// Only close what was saved; chrome:// and other non-restorable tabs stay open.
+		await closeTabs(groupTabs.filter((tab) => isStorableUrl(tab.url)).map((tab) => tab.id));
 		refresh();
 	};
 
 	const handleStoreSuggestion = async (suggestion: StoredTabSetSuggestion) => {
-		const selectedTabs = tabs.filter((tab) => suggestion.tabIds.includes(tab.id));
-		if (selectedTabs.length === 0) return;
+		const selectedTabs = tabs.filter(
+			(tab) => suggestion.tabIds.includes(tab.id) && isStorableUrl(tab.url),
+		);
+		if (selectedTabs.length === 0) {
+			window.alert("The selected suggestion has no restorable http(s) tabs to store.");
+			return;
+		}
 		if (
 			!window.confirm(
 				`Store ${selectedTabs.length} tabs in "${suggestion.setName}" and close them?`,
@@ -419,17 +444,14 @@ export function App() {
 		) {
 			return;
 		}
-		const availability = await serverApi.lookupSummaryAvailability(
-			selectedTabs.map((tab) => tab.url),
-		);
+		const availability: Record<string, SummaryAvailability> = {};
 		const storedTabs = await buildStoredTabInputs(selectedTabs, availability);
 		if (storedTabs.length === 0) {
 			window.alert("The selected suggestion has no restorable http(s) tabs to store.");
 			return;
 		}
-		await serverApi.appendStoredTabs(suggestion.setId, {
-			tabs: storedTabs,
-		});
+		if (suggestion.setId) await appendStoredTabs(suggestion.setId, storedTabs);
+		else await createStoredSet({ name: suggestion.setName, color: "grey", tabs: storedTabs });
 		await closeTabs(selectedTabs.map((tab) => tab.id));
 		dismiss();
 		refresh();
@@ -481,7 +503,7 @@ export function App() {
 			)}
 
 			{/* Main content: either proposal view or current tabs */}
-			{inProposalMode ? (
+			{inProposalMode && (
 				<ProposalView
 					suggestions={suggestions}
 					reasoning={reasoning}
@@ -498,15 +520,20 @@ export function App() {
 					}}
 					onStoreSuggestion={handleStoreSuggestion}
 					onDismiss={dismiss}
+					fixedGroupIds={fixedGroupIds}
 				/>
-			) : tabsLoading ? (
+			)}
+			{!inProposalMode && tabsLoading && (
 				<div className="text-sm text-gray-400 dark:text-gray-500 text-center py-8">
 					Loading tabs&hellip;
 				</div>
-			) : (
+			)}
+			{!inProposalMode && !tabsLoading && (
 				<TabList
 					tabs={tabs}
 					groups={groups}
+					fixedGroupIds={fixedGroupIds}
+					onToggleFixedGroup={handleToggleFixedGroup}
 					scanProgress={scanProgress}
 					serverOnline={status === "online"}
 					onRenameGroup={handleRenameGroup}
@@ -535,7 +562,6 @@ export function App() {
 					onUpdate={updateMemory}
 					onDelete={removeMemory}
 					onClearAll={clearMemories}
-					onAIEdit={aiEditMemories}
 					onClose={() => setActivePanel(null)}
 				/>
 			)}

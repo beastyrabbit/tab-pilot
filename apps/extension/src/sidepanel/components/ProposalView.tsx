@@ -21,6 +21,7 @@ interface ProposalViewProps {
 	onSaveMemoryCandidate: (observation: string) => Promise<void>;
 	onStoreSuggestion: (suggestion: StoredTabSetSuggestion) => Promise<void>;
 	onDismiss: () => void;
+	fixedGroupIds?: Set<number>;
 }
 
 type TabStatus = "unchanged" | "moved" | "newly-grouped";
@@ -421,7 +422,8 @@ function ProposalGroup({
 	refining,
 	dispatch,
 	onRefine,
-}: {
+	fixedGroupIds,
+}: Readonly<{
 	groupKey: ProposalGroupKey;
 	suggestion: GroupingSuggestion;
 	tabsById: Map<number, TabInfo>;
@@ -430,7 +432,8 @@ function ProposalGroup({
 	refining: boolean;
 	dispatch: Dispatch<ProposalAction>;
 	onRefine: (feedback: string, targetGroupName?: string, targetTabId?: number) => void;
-}) {
+	fixedGroupIds?: Set<number>;
+}>) {
 	const isExpanded = state.expandedGroup === groupKey;
 
 	return (
@@ -444,6 +447,11 @@ function ProposalGroup({
 				className="w-full flex items-center justify-between px-3 py-2 text-left"
 			>
 				<span className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+					{fixedGroupIds?.has(suggestion.existingGroupId ?? -1) && (
+						<span className="mr-1 text-amber-400" title="Fixed favorite group">
+							★
+						</span>
+					)}
 					{suggestion.groupName}
 				</span>
 				<span className="text-xs text-gray-500 dark:text-gray-400">
@@ -578,7 +586,8 @@ export function ProposalView({
 	onSaveMemoryCandidate,
 	onStoreSuggestion,
 	onDismiss,
-}: ProposalViewProps) {
+	fixedGroupIds,
+}: Readonly<ProposalViewProps>) {
 	const [state, dispatch] = useReducer(proposalReducer, undefined, createProposalState);
 	const tabsById = useMemo(() => new Map(tabs.map((tab) => [tab.id, tab])), [tabs]);
 	const ungroupedTabs = useMemo(() => {
@@ -623,6 +632,7 @@ export function ProposalView({
 					refining={refining}
 					dispatch={dispatch}
 					onRefine={onRefine}
+					fixedGroupIds={fixedGroupIds}
 				/>
 			))}
 

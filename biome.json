@@ -36,13 +36,6 @@
 		}
 	},
 	"files": {
-		"includes": [
-			"**",
-			"!**/node_modules",
-			"!**/dist",
-			"!**/apps/server/data",
-			"!**/.ref",
-			"!**/*.json"
-		]
+		"includes": ["**", "!**/node_modules", "!**/dist", "!**/.ref", "!**/*.json"]
 	}
 }

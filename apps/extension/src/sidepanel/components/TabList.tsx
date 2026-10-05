@@ -15,10 +15,7 @@ import { extractTabContent } from "../services/chromeContentApi.js";
 import {
 	getCachedSummaries,
 	getSummaryStatuses,
-	requestBackgroundSummaryScan,
 	type ScanProgress,
-	type StoredSummaryScanProgress,
-	SUMMARY_SCAN_PROGRESS_KEY,
 	type SummaryStatus,
 } from "../services/screenshotCache.js";
 import { CHROME_GROUP_COLORS } from "../utils/chromeColors.js";
@@ -33,6 +30,8 @@ interface TabListProps {
 	onMoveTab?: (tabId: number, groupId: number) => void;
 	onUngroupTab?: (tabId: number) => void;
 	onStoreGroup?: (group: TabGroupInfo) => Promise<void>;
+	fixedGroupIds?: Set<number>;
+	onToggleFixedGroup?: (group: TabGroupInfo, fixed: boolean) => void;
 	scanProgress?: ScanProgress | null;
 	serverOnline?: boolean;
 }
@@ -208,9 +207,11 @@ export function TabList({
 	onMoveTab,
 	onUngroupTab,
 	onStoreGroup,
+	fixedGroupIds = new Set(),
+	onToggleFixedGroup,
 	scanProgress,
 	serverOnline = true,
-}: TabListProps) {
+}: Readonly<TabListProps>) {
 	const groupedTabIds = new Set(groups.flatMap((g) => g.tabIds));
 	const ungroupedTabs = tabs.filter((t) => !groupedTabIds.has(t.id));
 
@@ -219,73 +220,18 @@ export function TabList({
 	const [baseSummaryStatuses, setBaseSummaryStatuses] = useState<Map<number, SummaryStatus>>(
 		new Map(),
 	);
-	const [backgroundScanProgress, setBackgroundScanProgress] =
-		useState<StoredSummaryScanProgress | null>(null);
-	const requestedScanKeyRef = useRef<string | null>(null);
-	const tabIdentityKey = useMemo(() => tabs.map((tab) => `${tab.id}:${tab.url}`).join("|"), [tabs]);
-
 	useEffect(() => {
 		if (!serverOnline) return;
 		let cancelled = false;
 		getSummaryStatuses(tabs).then((statuses) => {
-			if (cancelled) return;
-			setBaseSummaryStatuses(statuses);
-			const hasMissingHttpSummary = tabs.some(
-				(tab) => tab.url.startsWith("http") && statuses.get(tab.id) === "missing",
-			);
-			if (hasMissingHttpSummary && requestedScanKeyRef.current !== tabIdentityKey) {
-				requestedScanKeyRef.current = tabIdentityKey;
-				void requestBackgroundSummaryScan("stage1");
-			}
+			if (!cancelled) setBaseSummaryStatuses(statuses);
 		});
 		return () => {
 			cancelled = true;
 		};
-	}, [serverOnline, tabIdentityKey, tabs]);
+	}, [serverOnline, tabs]);
 
-	useEffect(() => {
-		if (typeof chrome === "undefined" || !chrome.storage?.local) return;
-		let mounted = true;
-		chrome.storage.local.get(SUMMARY_SCAN_PROGRESS_KEY).then((result) => {
-			if (!mounted) return;
-			setBackgroundScanProgress(
-				(result[SUMMARY_SCAN_PROGRESS_KEY] as StoredSummaryScanProgress | undefined) || null,
-			);
-		});
-		const onChanged = (changes: Record<string, chrome.storage.StorageChange>, areaName: string) => {
-			if (areaName !== "local" || !changes[SUMMARY_SCAN_PROGRESS_KEY]) return;
-			const nextProgress =
-				(changes[SUMMARY_SCAN_PROGRESS_KEY].newValue as StoredSummaryScanProgress | undefined) ||
-				null;
-			setBackgroundScanProgress(nextProgress);
-			if (nextProgress?.phase === "done") {
-				void getSummaryStatuses(tabs).then(setBaseSummaryStatuses);
-			}
-		};
-		chrome.storage.onChanged.addListener(onChanged);
-		return () => {
-			mounted = false;
-			chrome.storage.onChanged.removeListener(onChanged);
-		};
-	}, [tabs]);
-
-	const recentBackgroundScanProgress =
-		backgroundScanProgress && Date.now() - backgroundScanProgress.updatedAt < 120_000
-			? backgroundScanProgress
-			: null;
-	const effectiveScanProgress = scanProgress || recentBackgroundScanProgress;
-	const stage2Running =
-		effectiveScanProgress?.kind === "stage2" && effectiveScanProgress.phase !== "done";
-
-	const summaryStatuses = useMemo(() => {
-		const next = new Map(baseSummaryStatuses);
-		if (effectiveScanProgress?.phase !== "done") {
-			for (const tabId of effectiveScanProgress?.activeTabIds || []) {
-				next.set(tabId, "in-progress");
-			}
-		}
-		return next;
-	}, [baseSummaryStatuses, effectiveScanProgress]);
+	const summaryStatuses = baseSummaryStatuses;
 
 	const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 	const tabById = useMemo(() => new Map(tabs.map((tab) => [tab.id, tab])), [tabs]);
@@ -387,31 +333,8 @@ export function TabList({
 
 				<div className="flex items-center justify-between gap-2 px-1">
 					<div className="text-[10px] text-gray-400 dark:text-gray-500">
-						{effectiveScanProgress && effectiveScanProgress.phase !== "done"
-							? `${effectiveScanProgress.kind === "stage2" ? "Stage 2" : "Stage 1"} ${
-									effectiveScanProgress.phase
-								} ${effectiveScanProgress.done}/${effectiveScanProgress.total}`
-							: "AI summaries"}
+						"AI context is loaded when needed"
 					</div>
-					<button
-						type="button"
-						onClick={() =>
-							requestBackgroundSummaryScan("stage2", "fast", { allowScreenshots: true })
-						}
-						disabled={!serverOnline || stage2Running || tabs.length === 0}
-						className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2 py-1 text-[10px] font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
-						title="Run Stage 2 screenshot summaries"
-					>
-						<svg className="size-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path
-								strokeLinecap="round"
-								strokeLinejoin="round"
-								strokeWidth={2}
-								d="M3 8h3l2-3h8l2 3h3v11H3V8zm9 8a4 4 0 100-8 4 4 0 000 8z"
-							/>
-						</svg>
-						Stage 2
-					</button>
 				</div>
 
 				{matchingTabIds !== null && (
@@ -440,6 +363,8 @@ export function TabList({
 								onMoveTab={onMoveTab}
 								onUngroupTab={onUngroupTab}
 								onStore={onStoreGroup}
+								fixed={fixedGroupIds.has(group.id)}
+								onToggleFixed={onToggleFixedGroup}
 								summaryStatuses={summaryStatuses}
 							>
 								{groupTabs.map((tab) => (

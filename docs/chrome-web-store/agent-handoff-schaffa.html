@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Tab Organizer 0.3.1 · Chrome Web Store Übergabe</title>
+<style>
+:root{color-scheme:light;font-family:system-ui,sans-serif;color:#172234;background:#f1f4f8;line-height:1.55}body{max-width:1050px;margin:auto;padding:24px}header,section{background:white;border:1px solid #d8e0ea;border-radius:12px;padding:24px;margin-bottom:20px}h1{font-size:1.8rem;line-height:1.2}h2{font-size:1.35rem}h3{font-size:1.05rem;margin-top:25px}a{color:#1555ad;overflow-wrap:anywhere}nav{display:flex;flex-wrap:wrap;gap:8px 18px}table{border-collapse:collapse;width:100%;margin:16px 0}td,th{padding:10px;text-align:left;border-bottom:1px solid #dde4ec;vertical-align:top}th{background:#f5f7fa}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:14px/1.6 ui-monospace,monospace;background:#f4f7fb;border:1px solid #dbe3ed;border-left:4px solid #3c73bb;border-radius:6px;padding:16px;user-select:all}code{overflow-wrap:anywhere}.open{border-left:5px solid #ca8418;background:#fff9ed;padding:16px}.note{color:#526176}li{margin:7px 0}details{margin:16px 0}summary{cursor:pointer;font-weight:600}@media(max-width:650px){body{padding:10px}header,section{padding:16px}table,tbody,tr,td,th{display:block}thead{display:none}td:first-child{font-weight:600}pre{font-size:12px}}@media print{body{background:white;padding:0}header,section{border:0;border-radius:0;padding:12px 0}nav{display:none}pre{break-inside:avoid}}
+</style>
+</head>
+<body>
+<header>
+<p class="note">Agenten-Übergabe · Stand 21. September 2026</p>
+<h1>Tab Organizer 0.3.1 im Chrome Web Store fertig vorbereiten</h1>
+<p>Auftrag: Den bestehenden Store-Entwurf direkt im angemeldeten integrierten T3-Browser vervollständigen, jede Seite speichern und die gespeicherten Werte kontrollieren. Der Nutzer möchte anschließend selbst absenden. <strong>Nicht auf „Prüfen lassen / Submit for review“ klicken.</strong></p>
+<p>Die Texte in den grauen Blöcken sind englische Formularwerte zum Kopieren. Die deutschen Hinweise erklären, in welches Feld sie gehören. Diese Datei enthält keine Zugangsdaten.</p>
+<nav><a href="#target">Ziel und Browser</a><a href="#uploads">Paket und Bilder</a><a href="#listing">Store-Eintrag</a><a href="#privacy">Datenschutz</a><a href="#policy">Datenschutzseite</a><a href="#distribution">Vertrieb</a><a href="#testing">Testanweisungen</a><a href="#finish">Abschluss</a></nav>
+</header>
+<section id="target">
+<h2>1. Bestehenden Entwurf übernehmen</h2>
+<table><tbody>
+<tr><th>Publisher</th><td>beastyrabbit</td></tr>
+<tr><th>Name</th><td>Tab Organizer</td></tr>
+<tr><th>Extension-ID</th><td><code>nnoleclnibghacjbilmdfalllpnongpn</code></td></tr>
+<tr><th>Version</th><td>0.3.1 · Manifest V3 · version_name: 0.3.1 standalone</td></tr>
+<tr><th>Store-Eintrag</th><td><a href="https://chrome.google.com/webstore/devconsole">Chrome Web Store Developer Dashboard öffnen</a> und den vorhandenen Entwurf „Tab Organizer“ mit der oben genannten Extension-ID auswählen.</td></tr>
+<tr><th>Datenschutz-Tab</th><td>Im bestehenden Entwurf den Bereich „Datenschutz“ öffnen.</td></tr>
+</tbody></table>
+<div class="open"><strong>Browser-Verwechslung vermeiden.</strong> Der Nutzer hat sich bereits im sichtbaren, integrierten T3-Browser angemeldet. Sein Screenshot zeigte diesen Entwurf auf der Datenschutzseite. Die separat gestartete Playwright-Sitzung war dagegen nicht angemeldet. Deren Login-Seite sagt nichts über den sichtbaren T3-Tab aus. Zuerst T3 <code>preview_status</code> und <code>preview_snapshot</code> verwenden. Bei „No preview automation host“ die Verbindung als fehlend melden, nicht eine erneute Google-Anmeldung verlangen. Keine weiteren separaten Browser anlegen.</div>
+<p>Frühere Antworten haben Speichern und erfolgreiche Uploads teilweise zu sicher dargestellt. Bestätigt ist die Erstellung dieser Extension-ID. Die Persistenz von Beschreibung, Kategorie und Bildern sowie das Hochladen von Version 0.3.1 sind <strong>noch zu prüfen</strong>. Kein zweites Store-Item erstellen.</p>
+<p>Architektur: Chrome-Erweiterung → vom Nutzer eingerichtete EasyCLIProxyAPI → dort angemeldeter KI-Anbieter. Kein eigener Tab-Organizer-Backendserver, kein Pi, kein Docker und kein mitgelieferter KI-Zugang. Ein separates, erreichbares EasyCLIProxyAPI ist für KI-Funktionen weiterhin erforderlich.</p>
+</section>
+<section id="uploads">
+<h2>2. Paket und Upload-Dateien</h2>
+<p>Das separat übergebene Archiv <code>tab-organizer-store-handoff.zip</code> enthält die folgenden Upload-Dateien. Diese Schaffa-Seite enthält die Ausfüllanleitung; die Dateien selbst sind im ZIP enthalten.</p>
+<table><thead><tr><th>Datei</th><th>Ziel / Format</th></tr></thead><tbody>
+<tr><td><code>tab-organizer-store.zip</code></td><td>Paket → Neues Paket hochladen, vorhandenes Item aktualisieren. Version 0.3.1.</td></tr>
+<tr><td><code>icon128.png</code></td><td>Händlersymbol / Store icon, 128 × 128</td></tr>
+<tr><td><code>screenshot-proposal.png</code></td><td>Screenshot 1, 640 × 400, RGB-PNG</td></tr>
+<tr><td><code>screenshot-review.png</code></td><td>Screenshot 2, 640 × 400, RGB-PNG</td></tr>
+<tr><td><code>promo-small-v2.png</code></td><td>Kleine Werbekachel, 440 × 280, RGB-PNG</td></tr>
+<tr><td><code>promo-large.png</code></td><td>Große Werbekachel, 1400 × 560, RGB-PNG</td></tr>
+<tr><td><code>privacy-policy.html</code></td><td>Datenschutzerklärung für GitHub Pages unter <code>docs/privacy-policy.html</code>.</td></tr>
+</tbody></table>
+<p>SHA-256 des vorbereiteten Extension-ZIP:</p>
+<pre>895a036f6743ed149f08658bb8dec8501d1c475b8b9e761befe3758843df6ba5</pre>
+<p>Bei einer Codeänderung neu mit <code>pnpm package:extension</code> bauen und den neuen Hash dokumentieren. Den unveränderten Build nicht unnötig neu erzeugen. Vorhandene fremde Änderungen im Workspace erhalten.</p>
+<p class="note">Die beiden Werbekacheln sind lokal gestaltete Grafiken. Die KI-Bildgenerierung scheiterte an fehlendem API-Guthaben. Nicht als ImageGen-Ergebnis bezeichnen. Die alte <code>promo-small.png</code> wird nicht verwendet.</p>
+</section>
+<section id="listing">
+<h2>3. Store-Eintrag</h2>
+<table><tbody>
+<tr><th>Name des Pakets</th><td>Tab Organizer. Wird aus dem Manifest übernommen.</td></tr>
+<tr><th>Zusammenfassung des Pakets</th><td>Wird aus dem Manifest übernommen. Exakter Wert unten.</td></tr>
+<tr><th>Kategorie</th><td>Produktivität → Workflow &amp; Planung / Productivity → Workflow &amp; Planning. Die Überschrift „PRODUKTIVITÄT“ allein ist möglicherweise nicht auswählbar. Den eigentlichen Unterkategorie-Eintrag auswählen und nach Speichern prüfen.</td></tr>
+<tr><th>Sprache</th><td>English / Englisch</td></tr>
+<tr><th>Offizielle URL / verifizierte Website</th><td>Keine, solange keine passende verifizierte Produktwebsite vorliegt. Keine fremde verfügbare Domain nur wegen ihrer Verfügbarkeit auswählen.</td></tr>
+<tr><th>URL der Startseite</th><td><code>https://github.com/beastyrabbit/tab-pilot</code></td></tr>
+<tr><th>Support-URL</th><td><code>https://github.com/beastyrabbit/tab-pilot/issues</code></td></tr>
+<tr><th>Nicht jugendfreie Inhalte</th><td>Nein</td></tr>
+<tr><th>Globales Werbevideo</th><td>Leer lassen, kein Video vorbereitet.</td></tr>
+<tr><th>Support für Artikel</th><td>Vorhandene Einstellung erhalten; die Support-URL ausfüllen.</td></tr>
+</tbody></table>
+<p>Startseite und Issue-Tracker vor Eintragen ohne Anmeldung öffnen und öffentliche Erreichbarkeit prüfen. Bei privatem Repository eine echte öffentliche Supportseite vom Nutzer anfordern.</p>
+<h3>Zusammenfassung, exakt wie im 0.3.1-Manifest</h3>
+<pre>Organize Chrome tabs with a user-configured local AI proxy, protected groups, and a reviewable proposal.</pre>
+<h3>Beschreibung</h3>
+<pre>Tab Organizer groups open Chrome tabs by topic and task. Review the proposed changes before applying them, keep uncertain tabs ungrouped, and mark important groups as protected favorites.
+
+Features
+• Preview proposed groups before applying changes.
+• Preserve and prefer protected favorite groups.
+• Use existing groups or create focused new groups.
+• Choose soft grouping for cautious suggestions or hard grouping for complete coverage.
+• Inspect recent runs and the verified result after Apply.
+• Detect exact duplicate URLs and optionally close older copies.
+• Select models and supported thinking options through your configured proxy.
+
+AI connection
+This extension requires an EasyCLIProxyAPI instance that you run and configure separately. It does not include a hosted AI service or an OpenAI API key. EasyCLIProxyAPI can connect through Codex OAuth using a compatible ChatGPT subscription, subject to the provider's availability and terms.
+
+Install EasyCLIProxyAPI, connect your supported provider there, and enter its API base URL in Settings. The default address is http://127.0.0.1:8317/v1. If your proxy requires a client key, enter that key in Settings. This is the proxy's key, not a requirement to purchase an OpenAI API key.
+
+Privacy
+AI operations send tab titles, URLs, group information, your instructions, and selected page metadata or text excerpts to the proxy you configure. The proxy forwards requests to its configured AI provider. Settings and run history are stored locally in Chrome. Tab Organizer does not operate a server that receives your tab information. Website icons may load from external sites; a Google favicon fallback may receive the tab's domain. See the privacy policy for details.</pre>
+</section>
+<section id="privacy">
+<h2>4. Datenschutzformular</h2>
+<h3>Alleiniger Zweck · Single purpose description</h3>
+<pre>Help users organize their open Chrome tabs into topic-based tab groups. The extension shows current tabs and generates grouping proposals through a user-configured AI proxy. Users review proposals before applying them and can protect favorite groups. Local settings, saved tab sets, duplicate handling, and run history support this tab-organization workflow.</pre>
+<h3>Begründung für tabs</h3>
+<pre>The tabs permission is used to read open tab titles, URLs, window IDs, and group IDs, display the current tab list, and build tab-organization proposals. It also supports user-requested tab actions, including moving tabs and optional duplicate closure. The extension does not read the user's full browser history through the history API.</pre>
+<h3>Begründung für tabGroups</h3>
+<pre>The tabGroups permission is used to read existing group names and colors and to create, update, collapse, and reorder tab groups as part of user-requested organization. Existing protected favorite groups are retained. AI proposals are presented for review before their grouping changes are applied.</pre>
+<h3>Begründung für activeTab</h3>
+<pre>The activeTab permission supports access to the current page following a user interaction with the extension, for page-context inspection used in tab organization. Inspection reads page metadata or text to help classify tabs; it is not used to monitor typing or interactions.</pre>
+<p class="note">Vor Abgabe prüfen, ob <code>activeTab</code> neben den breiten Hostberechtigungen tatsächlich benötigt wird. Wenn die Berechtigung ungenutzt ist, im Paket entfernen und neu bauen, statt eine nicht vorhandene Funktion zu behaupten. Nicht während des bloßen Ausfüllens stillschweigend Code ändern.</p>
+<h3>Begründung für sidePanel</h3>
+<pre>The sidePanel permission provides the Tab Organizer interface alongside the user's browsing session. The panel displays tabs, organization settings, protected groups, AI proposals, and recent run results so users can review and apply changes without navigating away from their pages.</pre>
+<h3>Begründung für scripting</h3>
+<pre>The scripting permission runs packaged extraction code on selected HTTP or HTTPS tabs during user-requested organization to read page metadata or page text when titles and URLs are insufficient. This context helps classify tabs. Extracted page content is treated as data. The extension does not download or execute remote scripts.</pre>
+<h3>Begründung für favicon</h3>
+<pre>The favicon permission is used to display website icons through Chrome's extension favicon endpoint in the proposal interface. Icons help users recognize the tabs they are reviewing before applying organization changes.</pre>
+<h3>Begründung für storage</h3>
+<pre>The storage permission stores extension settings, the user-configured proxy address and optional proxy client key, protected-group markers, memories, saved tab sets, summary cache, and recent run history in chrome.storage.local on the user's device. The extension does not use Chrome sync storage for these records.</pre>
+<h3>Begründung für Hostberechtigung</h3>
+<pre>HTTP and HTTPS host access is used to connect to the user's chosen EasyCLIProxyAPI endpoint, which can be a localhost, local-network, or HTTPS address, and to extract metadata or text from selected web pages for user-requested tab organization. The proxy host and the tabs to organize are not known at installation time. Tab icons may also load from external sites or Google's favicon service. These requests support the tab-organization interface; no remote executable code is loaded.</pre>
+<h3>Nutzt du „remote code“?</h3>
+<p><strong>Nein, ich verwende „remote code“ nicht.</strong> Im Screenshot des Nutzers war „Ja“ markiert. Das muss korrigiert werden. KI-Aufrufe und JSON-Antworten sind keine heruntergeladenen JS- oder Wasm-Programme.</p>
+<p>Falls trotz „Nein“ ein Erläuterungsfeld angeboten wird:</p>
+<pre>All executable JavaScript is included in the submitted extension package. The extension contacts the configured proxy for model discovery and AI responses. Those responses are parsed as data and are not evaluated as executable code. External favicon images are not executable code.</pre>
+<h3>Datennutzung · Welche Nutzerdaten werden verarbeitet?</h3>
+<table><thead><tr><th>Kategorie</th><th>Angabe</th></tr></thead><tbody>
+<tr><td>Webprotokoll / Web history / Browsing activity</td><td>Ja. Offene Tab-URLs, Titel und Domains werden gelesen und für KI-Operationen übertragen. Kein Zugriff auf das vollständige Chrome-Verlaufsarchiv.</td></tr>
+<tr><td>Websiteinhalte / Website content</td><td>Ja. Metadaten und ausgewählte Seitentexte können verarbeitet und an den konfigurierten KI-Dienst weitergeleitet werden.</td></tr>
+<tr><td>Authentifizierungsinformationen</td><td>Optionaler Proxy-Client-Key wird lokal gespeichert und als Authorization-Header an den gewählten Proxy gesendet. Diese Verarbeitung offenlegen und anhand der aktuellen Dashboard-Definition deklarieren. Nicht pauschal „keine Zugangsdaten“ angeben.</td></tr>
+<tr><td>Nutzeraktivität</td><td>Kein allgemeines Aufzeichnen von Klicks, Tastatureingaben oder Mausbewegungen implementiert. Anhand der aktuellen Definition prüfen; nicht allein wegen der Tab-Liste auswählen.</td></tr>
+<tr><td>Personenbezogene Angaben, Gesundheit, Finanzen, persönliche Kommunikation, Standort</td><td>Keine gesonderten Eingabefelder oder entsprechenden Geräte-APIs implementiert. Tab-Titel, URLs und unredigierte Seitenauszüge können trotzdem solche Inhalte enthalten. Vor der endgültigen Erklärung prüfen, welche Kategorien Google für diese indirekte Verarbeitung verlangt; nicht ungeprüft ausschließen.</td></tr>
+</tbody></table>
+<p>Bei Zweck-Auswahl „App functionality / Funktionalität der Anwendung“ verwenden. Übertragung an den vom Nutzer konfigurierten Proxy und dessen KI-Anbieter angeben. Zusätzlich den Google-Favicon-Fallback offenlegen. Nicht „alle Daten bleiben immer lokal“ oder „keine Datenweitergabe“ behaupten.</p>
+<h3>Erklärungen zur Verwendung von Daten</h3>
+<p>Die folgenden üblichen Zertifizierungen mit dem tatsächlichen Formularwortlaut abgleichen und markieren, sofern sie unverändert zutreffen:</p>
+<ul><li>Kein Verkauf oder Transfer von Nutzerdaten außerhalb der zulässigen Anwendungsfälle.</li><li>Keine Verwendung oder Weitergabe für Zwecke ohne Bezug zum alleinigen Zweck der Erweiterung.</li><li>Keine Verwendung oder Weitergabe zur Bestimmung der Kreditwürdigkeit oder für Kreditvergabe.</li></ul>
+<p>Keine generelle Verschlüsselung aller Übertragungen behaupten. Der Nutzer kann einen HTTP-Proxy konfigurieren; HTTPS hängt von seinem Endpoint ab.</p>
+<h3>URL der Datenschutzerklärung</h3>
+<div class="open">GitHub-Pages-Ziel: <code>https://beastyrabbit.github.io/tab-pilot/privacy-policy.html</code>. GitHub Pages ist auf <code>main</code> / <code>/docs</code> eingerichtet. Diese URL ohne Anmeldung abrufen und im Store eintragen. Die Seite verwendet ausschließlich den öffentlichen Pseudonym-Namen <code>beastyrabbit</code>.</div>
+</section>
+<section id="policy">
+<h2>5. Datenschutzseite für GitHub Pages</h2>
+<p>Die Datei <code>privacy-policy.html</code> liegt dem separat übergebenen ZIP bei und wird als <code>docs/privacy-policy.html</code> im Repository veröffentlicht. Die öffentliche URL ist <code>https://beastyrabbit.github.io/tab-pilot/privacy-policy.html</code>.</p>
+<div class="open"><strong>Vor Veröffentlichung ergänzen:</strong> Im aktuellen Code <code>TabItem.tsx</code> werden Favicons direkt geladen; bei fehlendem oder fehlgeschlagenem Icon verwendet die Erweiterung <code>https://www.google.com/s2/favicons?domain=…</code>. Dadurch kann eine Domain bereits beim Anzeigen der Tabs an Google übertragen werden, unabhängig von einem KI-Lauf. Das ist im alten Entwurf nicht ausreichend beschrieben. Die tatsächliche Betreiberidentität und ein geeigneter Datenschutzkontakt sind ebenfalls noch zu bestätigen.</div>
+<p>Diese Absätze in die Datenschutzerklärung aufnehmen und mit der übrigen Seite abstimmen:</p>
+<pre>Website icons
+To help users recognize their tabs, the extension displays website icons. Icons may load from the website or its icon host. If an icon is missing or cannot be loaded, the extension may request an icon from Google's favicon service using the tab's domain name. Such requests disclose the requested domain and standard network request information, including the user's IP address, to that service. They can occur while displaying tabs, without starting an AI operation. Google's privacy policy applies to that service.
+
+Proxy credentials and connection checks
+If the user's proxy requires a client key, the extension stores the user-provided key locally and sends it to the configured proxy in an authorization header. Tab Organizer does not read Codex CLI authentication files. Connection checks and model discovery may contact the configured proxy outside an organization run; they do not need to include tab contents.
+
+Content supplied to AI
+Tab titles, URLs, group information, user instructions, and selected page metadata or text excerpts may contain personal or sensitive information from the user's pages. The extension sends the selected content to the configured proxy to answer the user's request. The proxy may forward it to its configured AI provider. This processing does not mean that the developer receives the content.</pre>
+<p>Die veröffentlichte Seite muss den Produktnamen nennen und diese tatsächlichen Datenflüsse beschreiben. Betreiber, Datenschutzkontakt, erforderliche Rechtsgrundlagen und gegebenenfalls Angaben zu Drittlandtransfers anhand der Betreiberkonstellation ergänzen; dazu liegen hier keine bestätigten Angaben vor. Die Website muss nicht in der Navigation erscheinen, muss aber über den Store-Link lesbar bleiben.</p>
+</section>
+<section id="distribution">
+<h2>6. Vertrieb und Kontoeinstellungen</h2>
+<table><tbody>
+<tr><th>Sichtbarkeit</th><td>Nicht gelistet / Unlisted für die erste Einreichung. Damit später über den Link installierbar, ohne allgemeinen Suchtreffer. Nicht „Privat“ auswählen.</td></tr>
+<tr><th>Regionen</th><td>Alle verfügbaren Regionen, wie bisher vorbereitet. Einschränkungen des Publisherkontos erhalten.</td></tr>
+<tr><th>Preis, falls abgefragt</th><td>Kostenlos. Kein Kauf innerhalb der Erweiterung. Externer Proxy und KI-Zugang sind Voraussetzung; deren mögliche Kosten werden nicht von Tab Organizer abgewickelt.</td></tr>
+<tr><th>Händlerstatus / Trader declaration</th><td>Falls erforderlich, vom Publisher bestätigen lassen. Nicht aus dem GitHub-Namen oder einer Firmenwebsite ableiten.</td></tr>
+<tr><th>Adresse, rechtlicher Name, Kontakt-E-Mail, Verifizierung</th><td>Vorhandene bestätigte Kontodaten erhalten. Fehlende Pflichtangaben nicht erfinden und keine private E-Mail eigenmächtig veröffentlichen.</td></tr>
+<tr><th>Support/Website-Verifizierung</th><td>Keine willkürliche Domain auswählen. Öffentliche Projekt- und Supportlinks prüfen.</td></tr>
+</tbody></table>
+<p>Im beobachteten Dashboard ist „Zugriff“ eine Navigationsüberschrift mit dem Unterpunkt „Testanweisungen“, nicht zwingend eine separate Formularseite. Nur tatsächlich vorhandene Felder bearbeiten.</p>
+</section>
+<section id="testing">
+<h2>7. Zugriff und Testanweisungen</h2>
+<p>Die Erweiterung hat keinen eigenen Login. Ihre KI-Funktionen brauchen aber einen erreichbaren Proxy mit eingerichtetem KI-Anbieter. Falls Google nach eingeschränkten Funktionen oder Zugangsvoraussetzungen fragt, diese Voraussetzung angeben; nicht „uneingeschränkt ohne Einrichtung testbar“ wählen.</p>
+<h3>Testanweisungen, kompletter Text</h3>
+<pre>Tab Organizer 0.3.1 review instructions
+
+Purpose
+The extension organizes open Chrome tabs into groups. Users review AI proposals before applying them and can protect favorite groups.
+
+Setup
+1. Install the submitted Manifest V3 extension and open its side panel from the toolbar.
+2. Local UI features can be inspected without an AI connection, including the tab list, settings, group controls, and run-history interface. Generating an AI proposal requires the proxy setup below.
+3. Install and run EasyCLIProxyAPI separately: https://github.com/router-for-me/EasyCLIProxyAPI
+4. Authenticate a supported provider in that proxy. For Codex OAuth, use a reviewer-controlled account with the required provider access. The extension does not include developer credentials and does not read Codex CLI auth.json files.
+5. In extension Settings, enter a proxy API base URL reachable from the machine running Chrome. The default is http://127.0.0.1:8317/v1. Here localhost refers to the reviewer's machine, not to a developer-hosted service.
+6. If the proxy requires a client key, enter the reviewer's own proxy client key. This is separate from an OpenAI API key. Do not enter a proxy management key.
+7. Check the connection and load models. Model discovery calls GET /models under the configured base URL. AI requests use POST /chat/completions. Choose an available model and options supported by that proxy.
+
+Core test
+1. Open several non-sensitive public pages covering two or three topics.
+2. Create a tab group for one topic and mark it as a protected favorite using the star control.
+3. Click Organize Tabs and wait for the proposal.
+4. Expand the proposed groups and inspect assignments. Tabs with uncertain matches may remain ungrouped in soft mode.
+5. Click Apply and confirm the proposed tab grouping is applied and the protected favorite is retained.
+6. Open Settings and the recent-run history to inspect the recorded proposal and post-Apply result.
+7. For a failure-path test, configure an unreachable proxy and confirm the connection error is shown. This does not test successful AI organization.
+
+Data and code
+The extension reads tab information and may extract page metadata or text for classification. It sends AI inputs to the configured proxy. Settings and run history are stored in chrome.storage.local. Website icons may load externally, including a Google favicon fallback. All executable extension code is bundled; remote AI responses are processed as data.
+
+No shared username, password, API credential, or hosted reviewer endpoint is provided. Full AI review requires the reviewer's configured proxy and provider access. If this setup is insufficient for your review process, please request an alternative review arrangement from the publisher.</pre>
+<p>Benutzername/Passwort-Felder leer lassen, sofern optional. Keine persönlichen Zugangsdaten bereitstellen. Falls Google einen unmittelbar nutzbaren Testzugang zwingend verlangt, ist dieser noch offen; dafür gibt es in dieser Übergabe keine Zugangsdaten.</p>
+</section>
+<section id="finish">
+<h2>8. Speichern, prüfen und übergeben</h2>
+<ol>
+<li>Im richtigen sichtbaren Browser Publisher und Extension-ID prüfen.</li>
+<li>Paket-Version kontrollieren, bei Bedarf das beigefügte 0.3.1-ZIP im vorhandenen Item hochladen.</li>
+<li>Store-Eintrag, Icon, beide Screenshots sowie kleine und große Werbekachel kontrollieren oder ergänzen. Auf Bildvalidierungsfehler achten.</li>
+<li>Datenschutztexte inklusive favicon eintragen. Remote-Code auf „Nein“ setzen. Datennutzung nach tatsächlicher Verarbeitung und aktueller Formularbeschreibung deklarieren.</li>
+<li>Die ergänzte, veröffentlichte Datenschutzseite ohne Anmeldung öffnen und erst dann deren URL eintragen.</li>
+<li>Vertrieb auf „Unlisted“ setzen und Testanweisungen einfügen. Kontofragen mit unbekannten rechtlichen Angaben offen benennen.</li>
+<li>Jeden bearbeiteten Bereich mit „Speichern“ sichern. Danach die Seite erneut öffnen und prüfen, ob die Werte erhalten sind. Vorher nicht als gespeichert melden.</li>
+<li>„Warum kann ich keinen Artikel einreichen?“ öffnen und alle verbleibenden Validierungsmeldungen erfassen. Keine Fehlermeldung durch erfundene Angaben beseitigen.</li>
+<li>Dem Nutzer den fertigen Entwurf und eine kurze Liste verbleibender Pflichtangaben übergeben. Abschließendes „Prüfen lassen / Submit for review“ dem Nutzer überlassen.</li>
+</ol>
+<h3>Bekannte offene Punkte</h3>
+<ul>
+<li>Die veröffentlichte Datenschutz-URL wurde als <code>https://beastyrabbit.github.io/tab-pilot/privacy-policy.html</code> verifiziert.</li>
+<li>Gespeicherter Stand im Store und hochgeladene Paketversion sind nicht abschließend verifiziert.</li>
+<li>Die Automationsverbindung muss den sichtbaren integrierten T3-Browser erreichen.</li>
+<li>Rechtliche Publisherangaben, aktuelle Google-Datenkategorien und eventuelle Anforderungen an Testzugänge sind anhand des aktuellen Formulars zu prüfen.</li>
+</ul>
+<p class="note">Lokal zuvor erfolgreich geprüft: Extension-Build, TypeScript-Prüfung, 16 Proxy-Tests und ZIP-Manifest mit Version 0.3.1. Das ist keine Bestätigung einer Store-Freigabe oder einer vollständig geprüften Datenschutzerklärung.</p>
+</section>
+</body>
+</html>

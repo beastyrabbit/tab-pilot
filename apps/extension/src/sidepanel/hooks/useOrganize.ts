@@ -1,14 +1,24 @@
 import type {
 	GroupingSuggestion,
 	MemoryCandidate,
+	PublicSettings,
 	StoredTabSetSuggestion,
 	TabGroupInfo,
 	TabInfo,
 } from "@tab-orga/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { collapseAndReorderGroups, groupTabs, updateGroup } from "../services/chromeTabsApi.js";
+import { extractTabContent } from "../services/chromeContentApi.js";
+import {
+	closeTabs,
+	collapseAndReorderGroups,
+	groupTabs,
+	ungroupTabs,
+	updateGroup,
+} from "../services/chromeTabsApi.js";
 import { clientDebug } from "../services/clientDebug.js";
 import { startContentBridge } from "../services/contentBridge.js";
+import { pickDuplicateTabsToClose } from "../services/duplicates.js";
+import { resolveFixedGroupIds, setFixedGroup, syncFixedGroupIds } from "../services/fixedGroups.js";
 import {
 	clearStoredOrganizeRun,
 	getStoredOrganizeRun,
@@ -17,11 +27,262 @@ import {
 	type StoredOrganizeRun,
 	saveStoredOrganizeRun,
 } from "../services/organizeRun.js";
-import { requestBackgroundSummaryScan, type ScanProgress } from "../services/screenshotCache.js";
-import { serverApi } from "../services/serverApi.js";
+import { loadOrganizerPreferences, organizeViaProxy, refineViaProxy } from "../services/proxyAi.js";
+import {
+	logSettings,
+	type OrganizeRunLog,
+	recordOutcome,
+	recordProposal,
+	saveRunLog,
+	snapshotGroups,
+	snapshotTabs,
+} from "../services/runHistory.js";
+import type { ScanProgress } from "../services/screenshotCache.js";
+import { loadSettings } from "./useSettings.js";
 
 function mapOriginalGroups(entries: Array<[number, number]> | undefined): Map<number, number> {
 	return new Map(entries || []);
+}
+
+function titleNeedsContext(tab: TabInfo): boolean {
+	const title = tab.title.trim();
+	const host = (() => {
+		try {
+			return new URL(tab.url).hostname.replace(/^www\./, "");
+		} catch {
+			return "";
+		}
+	})();
+	const genericTitle = !title || /^(new tab|home|welcome|untitled|loading|dashboard)$/i.test(title);
+	return genericTitle || title.length < 12 || title.toLowerCase() === host;
+}
+
+const MAX_DEEP_READS = 24;
+
+async function prepareTabContext(tabs: TabInfo[]): Promise<TabInfo[]> {
+	// Scripts cannot run in non-web pages or in tabs Chrome has not loaded since a restore.
+	const live = await chrome.tabs.query({}).catch(() => [] as chrome.tabs.Tab[]);
+	const unloaded = new Set(
+		live.filter((tab) => tab.discarded || String(tab.status) === "unloaded").map((tab) => tab.id),
+	);
+	const queue = tabs.filter((tab) => /^https?:/.test(tab.url) && !unloaded.has(tab.id));
+	const context = new Map<number, TabInfo>();
+	let deepReads = 0;
+	const worker = async () => {
+		while (queue.length) {
+			const tab = queue.shift();
+			if (!tab) return;
+			// An ambiguous title gets one full read, which also returns the metadata.
+			const fullRead = titleNeedsContext(tab) && deepReads < MAX_DEEP_READS;
+			if (fullRead) deepReads += 1;
+			let content = await extractTabContent(tab.id, fullRead);
+			if (
+				content &&
+				!fullRead &&
+				!content.metaDescription &&
+				!content.ogDescription &&
+				deepReads < MAX_DEEP_READS
+			) {
+				deepReads += 1;
+				content = (await extractTabContent(tab.id, true)) ?? content;
+			}
+			if (!content) continue;
+			context.set(tab.id, {
+				...tab,
+				metaDescription: content.metaDescription || content.ogDescription || undefined,
+				pageText: content.pageText?.slice(0, 1800) || undefined,
+			});
+		}
+	};
+	await Promise.all(Array.from({ length: Math.min(6, queue.length) }, worker));
+	return tabs.map((tab) => context.get(tab.id) ?? tab);
+}
+
+/** Browser state and settings shared by the apply steps. */
+interface ApplyContext {
+	settings: PublicSettings;
+	/** Every open tab when apply started. */
+	liveTabs: chrome.tabs.Tab[];
+	/** Tabs from the proposal that still exist, with their pre-apply group ids. */
+	currentTabs: TabInfo[];
+	/** Fixed group ids; a recreated fixed group's new id is added. */
+	fixedIds: Set<number>;
+	/** Where each tab should end up, for the run-history outcome check. */
+	expected: Map<number, number>;
+}
+
+/** Re-attach tabs to a fixed group, or recreate it (and keep it fixed) if Chrome deleted it. */
+async function applyFixedSuggestion(
+	suggestion: GroupingSuggestion,
+	groupId: number,
+	ctx: ApplyContext,
+): Promise<void> {
+	console.log(`[apply] Preserving fixed group ${groupId}`);
+	let fixedGid = groupId;
+	try {
+		await groupTabs(suggestion.tabIds, fixedGid);
+	} catch (e) {
+		// Chrome deletes a group once its last tab leaves; recreate it and keep it fixed.
+		console.warn(
+			`[apply] Fixed group ${fixedGid} is gone, recreating "${suggestion.groupName}"`,
+			e,
+		);
+		fixedGid = await groupTabs(suggestion.tabIds);
+		await updateGroup(fixedGid, { title: suggestion.groupName, color: suggestion.color });
+		const group = { title: suggestion.groupName, color: suggestion.color };
+		await setFixedGroup({ id: groupId, ...group }, false);
+		await setFixedGroup({ id: fixedGid, ...group }, true);
+		ctx.fixedIds.add(fixedGid);
+	}
+	for (const id of suggestion.tabIds) ctx.expected.set(id, fixedGid);
+}
+
+/** Put tabs into the suggested existing group when allowed, otherwise into a new group. */
+async function placeSuggestion(suggestion: GroupingSuggestion, ctx: ApplyContext): Promise<number> {
+	const existingId = suggestion.existingGroupId;
+	if (existingId == null) return groupTabs(suggestion.tabIds);
+	// "Do not add to existing groups" still lets a group keep its own current tabs.
+	const onlyCurrentMembers = suggestion.tabIds.every(
+		(id) => ctx.currentTabs.find((tab) => tab.id === id)?.groupId === existingId,
+	);
+	if (!ctx.settings.allowAddToExistingGroups && !onlyCurrentMembers) {
+		return groupTabs(suggestion.tabIds);
+	}
+	try {
+		return await groupTabs(suggestion.tabIds, existingId);
+	} catch (e) {
+		console.warn(
+			`[apply] Existing group ${existingId} unavailable for "${suggestion.groupName}", creating a new group`,
+			e,
+		);
+		return groupTabs(suggestion.tabIds);
+	}
+}
+
+async function applyGroupSuggestion(
+	suggestion: GroupingSuggestion,
+	ctx: ApplyContext,
+): Promise<void> {
+	const gid = await placeSuggestion(suggestion, ctx);
+	for (const id of suggestion.tabIds) ctx.expected.set(id, gid);
+	// Colors are validated in proxyAi.ts. A freshly created group always needs its
+	// title; "no renames" only protects reused groups.
+	const setTitle = gid !== suggestion.existingGroupId || ctx.settings.allowRenameGroups;
+	console.log(`[apply] Group "${suggestion.groupName}" gid=${gid} color="${suggestion.color}"`);
+	try {
+		await updateGroup(gid, {
+			...(setTitle ? { title: suggestion.groupName } : {}),
+			color: suggestion.color,
+		});
+	} catch (e) {
+		console.log(`[apply] updateGroup FAILED for "${suggestion.groupName}": ${String(e)}`);
+		// Fallback: try title-only
+		if (setTitle) await updateGroup(gid, { title: suggestion.groupName }).catch(() => {});
+	}
+}
+
+/** Hard mode: tabs the proposal left ungrouped go into one "Other" group. */
+async function groupRemainingTabs(toApply: GroupingSuggestion[], ctx: ApplyContext): Promise<void> {
+	const assigned = new Set(toApply.flatMap((suggestion) => suggestion.tabIds));
+	const remaining = ctx.currentTabs
+		.filter((tab) => !assigned.has(tab.id) && tab.groupId === -1)
+		.map((tab) => tab.id);
+	if (!remaining.length) return;
+	const gid = await groupTabs(remaining);
+	for (const id of remaining) ctx.expected.set(id, gid);
+	await updateGroup(gid, { title: "Other", color: "grey" });
+}
+
+/**
+ * Snapshot the browser and, when not preserving groups, ungroup every tab
+ * outside a fixed group so the proposal can rebuild them.
+ */
+async function prepareApply(
+	settings: PublicSettings,
+	proposalTabs: TabInfo[],
+	expected: Map<number, number>,
+): Promise<ApplyContext> {
+	// Tabs can close while the proposal is on screen; never touch ids that are gone.
+	const liveTabs = await chrome.tabs.query({});
+	const liveTabIds = new Set(liveTabs.map((tab) => tab.id));
+	const currentTabs = proposalTabs.filter((tab) => liveTabIds.has(tab.id));
+	const fixedIds = new Set((await syncFixedGroupIds()).map((group) => group.id));
+	if (!settings.preserveExistingGroups) {
+		const resetIds = currentTabs
+			.filter((tab) => tab.groupId >= 0 && !fixedIds.has(tab.groupId))
+			.map((tab) => tab.id);
+		if (resetIds.length) await ungroupTabs(resetIds);
+	}
+	return { settings, liveTabs, currentTabs, fixedIds, expected };
+}
+
+/** Move tabs into the proposed groups, then optionally close duplicates (recorded in closedIds). */
+async function applyToBrowser(
+	toApply: GroupingSuggestion[],
+	ctx: ApplyContext,
+	closedIds: number[],
+): Promise<void> {
+	const liveTabIds = new Set(ctx.liveTabs.map((tab) => tab.id));
+	for (const proposed of toApply) {
+		const tabIds = proposed.tabIds.filter((id) => liveTabIds.has(id));
+		if (tabIds.length === 0) continue;
+		const suggestion = { ...proposed, tabIds };
+		const existingId = suggestion.existingGroupId;
+		if (existingId != null && ctx.fixedIds.has(existingId)) {
+			await applyFixedSuggestion(suggestion, existingId, ctx);
+		} else {
+			await applyGroupSuggestion(suggestion, ctx);
+		}
+	}
+	if (ctx.settings.groupingMode === "hard") await groupRemainingTabs(toApply, ctx);
+	if (ctx.settings.closeDuplicateTabs) closedIds.push(...(await closeDuplicates(ctx)));
+}
+
+async function closeDuplicates(ctx: ApplyContext): Promise<number[]> {
+	const lastAccessed = new Map<number, number>();
+	const liveGroupOf = new Map<number, number>();
+	for (const tab of ctx.liveTabs) {
+		if (tab.id === undefined) continue;
+		lastAccessed.set(tab.id, tab.lastAccessed ?? 0);
+		liveGroupOf.set(tab.id, tab.groupId);
+	}
+	// A tab ends in a fixed group if apply put it there or it was already in one.
+	const inFixedGroup = (id: number) =>
+		ctx.fixedIds.has(ctx.expected.get(id) ?? liveGroupOf.get(id) ?? -1);
+	const ids = pickDuplicateTabsToClose(
+		ctx.currentTabs,
+		lastAccessed,
+		ctx.settings.keepNewestDuplicate,
+		inFixedGroup,
+	);
+	if (ids.length) await closeTabs(ids);
+	return ids;
+}
+
+/** Record the browser state after apply, limited to groups in the windows this run covered. */
+async function captureApplyOutcome(
+	runLog: OrganizeRunLog,
+	expected: Map<number, number>,
+	closedDuplicateIds: number[],
+	secret: string,
+): Promise<void> {
+	try {
+		const [tabs, groups] = await Promise.all([chrome.tabs.query({}), chrome.tabGroups.query({})]);
+		const runWindows = new Set(runLog.tabs?.map((tab) => tab.windowId));
+		const runGroupIds = new Set(
+			tabs.filter((tab) => runWindows.has(tab.windowId)).map((tab) => tab.groupId),
+		);
+		recordOutcome(
+			runLog,
+			tabs,
+			groups.filter((group) => runGroupIds.has(group.id)),
+			expected,
+			closedDuplicateIds,
+			secret,
+		);
+	} catch {
+		runLog.error = "Could not read browser state to verify the apply result.";
+	}
 }
 
 export function useOrganize() {
@@ -38,6 +299,15 @@ export function useOrganize() {
 	const [organizePhase, setOrganizePhase] = useState<OrganizeRunPhase | null>(null);
 	const [activeRunId, setActiveRunId] = useState<string | null>(null);
 	const tabsRef = useRef<TabInfo[]>([]);
+	const groupsRef = useRef<TabGroupInfo[]>([]);
+	const runLogRef = useRef<OrganizeRunLog | null>(null);
+	const persistLog = useCallback(async (log: OrganizeRunLog) => {
+		try {
+			await saveRunLog(log);
+		} catch {
+			setError("Run history could not be saved. Browser storage may be full.");
+		}
+	}, []);
 	const bridgeCleanupRef = useRef<(() => void) | null>(null);
 
 	const applyStoredRun = useCallback((run: StoredOrganizeRun | null) => {
@@ -85,73 +355,10 @@ export function useOrganize() {
 
 	const reconcileStoredRun = useCallback(
 		async (run: StoredOrganizeRun | null) => {
-			if (!run) {
-				applyStoredRun(null);
-				return;
-			}
-			if (run?.status !== "running") {
-				applyStoredRun(run);
-				return;
-			}
-			try {
-				const result = await serverApi.getOrganizeRun(run.id);
-				if (result.run) {
-					await saveStoredOrganizeRun(result.run);
-					applyStoredRun(result.run);
-					return;
-				}
-				clientDebug("organize", "clearing stale stored organize run", {
-					runId: run.id,
-					phase: run.phase,
-					updatedAt: run.updatedAt,
-				});
-				await clearStoredOrganizeRun();
-				applyStoredRun(null);
-			} catch (error) {
-				clientDebug("organize", "could not verify stored organize run; keeping it for retry", {
-					runId: run.id,
-					error: error instanceof Error ? error.message : String(error),
-				});
-				applyStoredRun(run);
-			}
+			applyStoredRun(run);
 		},
 		[applyStoredRun],
 	);
-
-	useEffect(() => {
-		if (!activeRunId || !loading) return;
-		let cancelled = false;
-		const poll = async () => {
-			try {
-				const result = await serverApi.getOrganizeRun(activeRunId);
-				if (cancelled) return;
-				if (!result.run) {
-					clientDebug("organize", "server no longer has active run; clearing local run", {
-						runId: activeRunId,
-					});
-					await clearStoredOrganizeRun();
-					applyStoredRun(null);
-					return;
-				}
-				await saveStoredOrganizeRun(result.run);
-				applyStoredRun(result.run);
-			} catch (error) {
-				if (cancelled) return;
-				clientDebug("organize", "failed to poll server organize run", {
-					runId: activeRunId,
-					error: error instanceof Error ? error.message : String(error),
-				});
-			}
-		};
-		void poll();
-		const intervalId = window.setInterval(() => {
-			void poll();
-		}, 1_500);
-		return () => {
-			cancelled = true;
-			window.clearInterval(intervalId);
-		};
-	}, [activeRunId, applyStoredRun, loading]);
 
 	const ensureBridge = useCallback(() => {
 		if (!bridgeCleanupRef.current) {
@@ -196,6 +403,17 @@ export function useOrganize() {
 
 	const organize = useCallback(
 		async (tabs: TabInfo[], groups: TabGroupInfo[], instruction = "") => {
+			const runLog: OrganizeRunLog = {
+				id: crypto.randomUUID(),
+				version: 2,
+				startedAt: new Date().toISOString(),
+				status: "running",
+				phase: "context",
+				tabCount: tabs.length,
+				groupCount: groups.length,
+			};
+			runLogRef.current = runLog;
+			void persistLog(runLog);
 			setLoading(true);
 			setError(null);
 			setSuggestions(null);
@@ -212,7 +430,6 @@ export function useOrganize() {
 
 			// Start content bridge so AI can request full page content while the panel is open.
 			ensureBridge();
-			void requestBackgroundSummaryScan("stage1", "fast");
 
 			try {
 				setScanProgress(null);
@@ -224,29 +441,62 @@ export function useOrganize() {
 				}
 				setOriginalGroupIds(origMap);
 
-				const result = await serverApi.startOrganizeRun({
-					tabs,
-					existingGroups: groups,
-					instruction: instruction.trim() || undefined,
-					contentDepth: "meta",
-				});
-				clientDebug("organize", "server organize run started", { runId: result.run.id });
-				await saveStoredOrganizeRun(result.run);
-				applyStoredRun(result.run);
+				const settings = await loadSettings();
+				runLog.settings = logSettings(settings);
+				groupsRef.current = groups;
+				const fixedGroups = await syncFixedGroupIds();
+				const resolvedIds = await resolveFixedGroupIds(groups);
+				runLog.tabs = snapshotTabs(tabs, settings.proxyApiKey);
+				runLog.groups = snapshotGroups(groups, resolvedIds, settings.proxyApiKey);
+				await persistLog(runLog);
+				const contextTabs = await prepareTabContext(tabs);
+				tabsRef.current = contextTabs;
+				runLog.tabs = snapshotTabs(contextTabs, settings.proxyApiKey);
+				runLog.groups = snapshotGroups(groups, resolvedIds, settings.proxyApiKey);
+				runLog.deepContextCount = contextTabs.filter((tab) => Boolean(tab.pageText)).length;
+				runLog.fixedGroupNames = runLog.groups
+					.filter((group) => group.fixed)
+					.map((group) => group.name);
+				runLog.phase = "model";
+				await persistLog(runLog);
+				const result = await organizeViaProxy(
+					settings,
+					contextTabs,
+					groups,
+					instruction.trim(),
+					fixedGroups,
+					await loadOrganizerPreferences(),
+				);
+				setSuggestions(result.suggestions);
+				setReasoning(result.reasoning);
+				setStoreSuggestions(result.storeSuggestions);
+				recordProposal(runLog, result.suggestions, "initial", settings.proxyApiKey);
+				runLog.status = "proposal";
+				runLog.phase = "proposal";
+				runLog.finishedAt = new Date().toISOString();
+				await persistLog(runLog);
+				setLoading(false);
+				setOrganizeMessage("Proposal ready");
+				setOrganizePhase("done");
 			} catch (e) {
 				const message = e instanceof Error ? e.message : "Failed to organize";
 				setError(message);
 				setLoading(false);
 				setOrganizeMessage("Organize failed");
 				setOrganizePhase("error");
+				runLog.status = "error";
+				runLog.error = `Organization failed during ${runLog.phase || "processing"}.`;
+				runLog.finishedAt = new Date().toISOString();
+				await persistLog(runLog);
 			}
 		},
-		[applyStoredRun, ensureBridge],
+		[ensureBridge, persistLog],
 	);
 
 	const refine = useCallback(
 		async (feedback: string, targetGroupName?: string, targetTabId?: number) => {
 			if (!suggestions) return;
+			const runLog = runLogRef.current;
 			setRefining(true);
 			setError(null);
 
@@ -254,72 +504,60 @@ export function useOrganize() {
 			ensureBridge();
 
 			try {
-				const result = await serverApi.refine({
-					suggestions,
-					tabs: tabsRef.current,
-					feedback,
-					targetGroupName,
-					targetTabId,
+				if (runLog) {
+					runLog.phase = "refine";
+					await persistLog(runLog);
+				}
+				const settings = await loadSettings();
+				const groups = groupsRef.current;
+				const result = await refineViaProxy(settings, suggestions, tabsRef.current, feedback, {
+					groups,
+					fixedGroups: await syncFixedGroupIds(),
+					preferences: await loadOrganizerPreferences(),
+					target: { groupName: targetGroupName, tabId: targetTabId },
 				});
+				if (runLog) {
+					recordProposal(runLog, result.suggestions, "refinement", settings.proxyApiKey);
+					runLog.status = "proposal";
+					runLog.phase = "proposal";
+					runLog.error = undefined;
+					await persistLog(runLog);
+				}
 				setSuggestions(result.suggestions);
 				setReasoning(result.reasoning);
 				setMemoryCandidates(result.memoryCandidates || []);
 				setStoreSuggestions(result.storeSuggestions || []);
 			} catch (e) {
 				setError(e instanceof Error ? e.message : "Failed to refine");
+				if (runLog) {
+					runLog.error = "Refinement failed; the previous proposal remains available.";
+					await persistLog(runLog);
+				}
 			} finally {
 				setRefining(false);
 			}
 		},
-		[suggestions, ensureBridge],
+		[suggestions, ensureBridge, persistLog],
 	);
 
 	const applySuggestions = useCallback(
 		async (toApply: GroupingSuggestion[]) => {
+			const runLog = runLogRef.current;
+			const expected = new Map<number, number>();
+			const closedDuplicateIds: number[] = [];
+			let logSecret = "";
 			try {
-				// 1. Create/update suggested groups
-				for (const suggestion of toApply) {
-					if (suggestion.tabIds.length === 0) continue;
-
-					let gid: number;
-					if (suggestion.existingGroupId != null) {
-						try {
-							gid = await groupTabs(suggestion.tabIds, suggestion.existingGroupId);
-						} catch (e) {
-							console.warn(
-								`[apply] Existing group ${suggestion.existingGroupId} unavailable for "${suggestion.groupName}", creating a new group`,
-								e,
-							);
-							gid = await groupTabs(suggestion.tabIds);
-						}
-					} else {
-						gid = await groupTabs(suggestion.tabIds);
-					}
-
-					// Set title + color in one call (colors are validated server-side)
-					const logMsg = `Group "${suggestion.groupName}" gid=${gid} color="${suggestion.color}"`;
-					console.log(`[apply] ${logMsg}`);
-					try {
-						await updateGroup(gid, {
-							title: suggestion.groupName,
-							color: suggestion.color,
-						});
-						console.log(`[apply] updateGroup OK for "${suggestion.groupName}"`);
-					} catch (e) {
-						const err = e instanceof Error ? e.message : String(e);
-						console.log(`[apply] updateGroup FAILED for "${suggestion.groupName}": ${err}`);
-						// Fallback: try title-only
-						try {
-							await updateGroup(gid, { title: suggestion.groupName });
-						} catch {}
-					}
-
-					// Verify the color was actually set
-					try {
-						const check = await chrome.tabGroups.get(gid);
-						console.log(`[apply] Verify gid=${gid}: title="${check.title}" color="${check.color}"`);
-					} catch {}
+				const organizeSettings = await loadSettings();
+				logSecret = organizeSettings.proxyApiKey || "";
+				if (runLog) {
+					recordProposal(runLog, toApply, "apply-selection", logSecret);
+					runLog.phase = "apply";
+					runLog.error = undefined;
+					await persistLog(runLog);
 				}
+				// 1. Create/update suggested groups
+				const ctx = await prepareApply(organizeSettings, tabsRef.current, expected);
+				await applyToBrowser(toApply, ctx, closedDuplicateIds);
 
 				// 2. Collapse ALL groups and move them to the left
 				await collapseAndReorderGroups();
@@ -331,13 +569,25 @@ export function useOrganize() {
 				setLoading(false);
 				setOrganizeMessage("");
 				setOrganizePhase(null);
+				if (runLog) {
+					await captureApplyOutcome(runLog, expected, closedDuplicateIds, logSecret);
+					runLog.status = "applied";
+					runLog.appliedAt = new Date().toISOString();
+					await persistLog(runLog);
+				}
 				void clearStoredOrganizeRun();
 				closeBridge();
 			} catch (e) {
 				setError(e instanceof Error ? e.message : "Failed to apply groups");
+				if (runLog) {
+					await captureApplyOutcome(runLog, expected, closedDuplicateIds, logSecret);
+					runLog.status = "error";
+					runLog.error = "Apply failed. Some tabs may already have moved; see the observed state.";
+					await persistLog(runLog);
+				}
 			}
 		},
-		[closeBridge],
+		[closeBridge, persistLog],
 	);
 
 	const dismiss = useCallback(() => {
