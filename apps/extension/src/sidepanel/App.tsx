@@ -374,7 +374,11 @@ export function App() {
 	};
 
 	const handleToggleFixedGroup = async (group: TabGroupInfo, fixed: boolean) => {
-		const next = await setFixedGroup(group, fixed);
+		const next = await setFixedGroup(
+			group,
+			fixed,
+			groups.map((item) => item.id),
+		);
 		setFixedGroupIds(new Set(next.map((item) => item.id)));
 	};
 

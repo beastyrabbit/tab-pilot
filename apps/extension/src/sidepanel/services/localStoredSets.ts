@@ -8,12 +8,13 @@ async function read(): Promise<StoredTabSet[]> {
 async function write(sets: StoredTabSet[]) {
 	await chrome.storage.local.set({ [KEY]: sets });
 }
-/** Same page, ignoring the fragment and a trailing slash, so variants are not stored twice. */
+/**
+ * Same page, ignoring only a trailing slash, so variants are not stored twice.
+ * Fragments stay: single-page apps use them for different pages.
+ */
 function normalizeUrl(raw: string): string {
 	try {
-		const url = new URL(raw);
-		url.hash = "";
-		return url.toString().replace(/\/$/, "");
+		return new URL(raw).toString().replace(/\/$/, "");
 	} catch {
 		return raw;
 	}

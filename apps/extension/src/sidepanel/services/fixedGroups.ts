@@ -12,16 +12,29 @@ export async function getFixedGroups(): Promise<FixedGroup[]> {
 	return Array.isArray(stored[FIXED_GROUPS_KEY]) ? (stored[FIXED_GROUPS_KEY] as FixedGroup[]) : [];
 }
 
+/**
+ * Pass the live group ids when unfixing: stale records with the same title and
+ * color (left over from before a restart) are dropped too, so a later sync
+ * cannot re-fix the group the user just unfixed.
+ */
 export async function setFixedGroup(
 	group: { id: number; title?: string; color: string },
 	fixed: boolean,
+	liveGroupIds: number[] = [],
 ): Promise<FixedGroup[]> {
 	const groups = await getFixedGroups();
-	const next = groups.filter((item) => item.id !== group.id);
+	const title = group.title || "Untitled";
+	const next = groups.filter(
+		(item) =>
+			item.id !== group.id &&
+			(fixed ||
+				liveGroupIds.includes(item.id) ||
+				!(item.title === title && item.color === group.color)),
+	);
 	if (fixed)
 		next.push({
 			id: group.id,
-			title: group.title || "Untitled",
+			title,
 			color: group.color,
 			markedAt: new Date().toISOString(),
 		});

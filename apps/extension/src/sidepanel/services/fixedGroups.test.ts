@@ -45,7 +45,14 @@ describe("syncFixedGroupIds", () => {
 describe("setFixedGroup", () => {
 	it("unfixes only the group with that id, even when another has the same title and color", async () => {
 		store[FIXED_GROUPS_KEY] = [fixed(9, "Streaming", "red"), fixed(10, "Streaming", "red")];
-		const next = await setFixedGroup({ id: 9, title: "Streaming", color: "red" }, false);
+		const next = await setFixedGroup({ id: 9, title: "Streaming", color: "red" }, false, [9, 10]);
 		expect(next.map((g) => g.id)).toEqual([10]);
+	});
+
+	it("drops stale same-title records on unfix so a later sync cannot re-fix the group", async () => {
+		store[FIXED_GROUPS_KEY] = [fixed(9, "Streaming", "red"), fixed(1, "Streaming", "red")];
+		await setFixedGroup({ id: 9, title: "Streaming", color: "red" }, false, [9]);
+		const synced = await syncFixedGroupIds([{ id: 9, title: "Streaming", color: "red" }]);
+		expect(synced).toEqual([]);
 	});
 });
