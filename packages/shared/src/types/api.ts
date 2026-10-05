@@ -130,6 +130,8 @@ export interface ModelsResponse {
 export interface ModelInfo {
 	id: string;
 	name: string;
+	thinkingLevels?: Array<"off" | "minimal" | "low" | "medium" | "high" | "xhigh">;
+	serviceTiers?: Array<"flex" | "default" | "priority">;
 }
 
 export interface TabSummarySnapshot {

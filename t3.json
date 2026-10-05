@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "actions": {
+    "install": { "description": "Install dependencies", "command": "pnpm install" },
+    "build-extension": { "description": "Build the extension for Chrome Developer Mode", "command": "pnpm build:extension" },
+    "package-extension": { "description": "Build the Chrome Web Store ZIP", "command": "pnpm package:extension" },
+    "check-proxy": { "description": "Check EasyCLIProxyAPI", "command": "pnpm proxy:check" },
+    "open-extension": { "description": "Open the built extension folder", "command": "xdg-open apps/extension/dist" }
+  }
+}

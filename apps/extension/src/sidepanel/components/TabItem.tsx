@@ -3,10 +3,10 @@ import { useState } from "react";
 import type { SummaryStatus } from "../services/screenshotCache.js";
 
 const SUMMARY_LED: Record<SummaryStatus, { className: string; label: string }> = {
-	stage2: { className: "bg-green-500", label: "Stage 2 screenshot summary ready" },
-	stage1: { className: "bg-pink-500", label: "Stage 1 metadata summary ready" },
-	missing: { className: "bg-red-500", label: "AI summary missing" },
-	"in-progress": { className: "bg-yellow-400", label: "AI summary in progress" },
+	stage2: { className: "bg-green-500", label: "AI context ready" },
+	stage1: { className: "bg-pink-500", label: "AI context ready" },
+	missing: { className: "bg-gray-400", label: "AI context will be read when organizing" },
+	"in-progress": { className: "bg-yellow-400", label: "Reading AI context" },
 };
 
 function Favicon({

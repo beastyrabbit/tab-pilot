@@ -1,6 +1,7 @@
 import type { UserRule } from "@tab-orga/shared";
 import { useCallback, useEffect, useState } from "react";
-import { serverApi } from "../services/serverApi.js";
+
+const KEY = "tab-orga-rules";
 
 export function useRules() {
 	const [rules, setRules] = useState<UserRule[]>([]);
@@ -8,7 +9,8 @@ export function useRules() {
 
 	const refresh = useCallback(async () => {
 		try {
-			setRules(await serverApi.getRules());
+			const result = await chrome.storage.local.get(KEY);
+			setRules((result[KEY] as UserRule[] | undefined) || []);
 		} catch {
 			// Server might be offline
 		} finally {
@@ -22,7 +24,11 @@ export function useRules() {
 
 	const create = useCallback(
 		async (rule: Omit<UserRule, "id" | "createdAt">) => {
-			await serverApi.createRule(rule);
+			const next = [
+				...rulesFromStorage(await chrome.storage.local.get(KEY)),
+				{ ...rule, id: crypto.randomUUID(), createdAt: new Date().toISOString() },
+			];
+			await chrome.storage.local.set({ [KEY]: next });
 			refresh();
 		},
 		[refresh],
@@ -30,7 +36,10 @@ export function useRules() {
 
 	const update = useCallback(
 		async (id: string, updates: Partial<UserRule>) => {
-			await serverApi.updateRule(id, updates);
+			const next = rulesFromStorage(await chrome.storage.local.get(KEY)).map((r) =>
+				r.id === id ? { ...r, ...updates } : r,
+			);
+			await chrome.storage.local.set({ [KEY]: next });
 			refresh();
 		},
 		[refresh],
@@ -38,11 +47,16 @@ export function useRules() {
 
 	const remove = useCallback(
 		async (id: string) => {
-			await serverApi.deleteRule(id);
+			const next = rulesFromStorage(await chrome.storage.local.get(KEY)).filter((r) => r.id !== id);
+			await chrome.storage.local.set({ [KEY]: next });
 			refresh();
 		},
 		[refresh],
 	);
 
 	return { rules, loading, create, update, remove, refresh };
+}
+
+function rulesFromStorage(value: { [KEY]: unknown }): UserRule[] {
+	return Array.isArray(value[KEY]) ? (value[KEY] as UserRule[]) : [];
 }

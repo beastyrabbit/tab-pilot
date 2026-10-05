@@ -13,6 +13,8 @@ interface GroupCardProps {
 	onMoveTab?: (tabId: number, groupId: number) => void;
 	onUngroupTab?: (tabId: number) => void;
 	onStore?: (group: TabGroupInfo) => Promise<void>;
+	fixed?: boolean;
+	onToggleFixed?: (group: TabGroupInfo, fixed: boolean) => void;
 	summaryStatuses?: Map<number, SummaryStatus>;
 	children?: ReactNode;
 }
@@ -27,6 +29,8 @@ export function GroupCard({
 	onMoveTab,
 	onUngroupTab,
 	onStore,
+	fixed = false,
+	onToggleFixed,
 	summaryStatuses,
 	children,
 }: GroupCardProps) {
@@ -87,6 +91,17 @@ export function GroupCard({
 					</button>
 				)}
 				<div className="flex items-center gap-1">
+					{onToggleFixed && (
+						<button
+							type="button"
+							aria-label={fixed ? "Unfix group" : "Fix group"}
+							onClick={() => onToggleFixed(group, !fixed)}
+							className={`${fixed ? "text-amber-400" : "text-gray-300 hover:text-amber-400 dark:text-gray-600 dark:hover:text-amber-300"} p-0.5`}
+							title={fixed ? "Fixed group" : "Fix group"}
+						>
+							★
+						</button>
+					)}
 					{!editing && onRename && (
 						<button
 							type="button"

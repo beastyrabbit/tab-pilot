@@ -1,6 +1,7 @@
 import type { AIMemory } from "@tab-orga/shared";
 import { useCallback, useEffect, useState } from "react";
-import { serverApi } from "../services/serverApi.js";
+
+const KEY = "tab-orga-memories";
 
 export function useMemory() {
 	const [memories, setMemories] = useState<AIMemory[]>([]);
@@ -8,7 +9,8 @@ export function useMemory() {
 
 	const refresh = useCallback(async () => {
 		try {
-			setMemories(await serverApi.getMemories());
+			const result = await chrome.storage.local.get(KEY);
+			setMemories((result[KEY] as AIMemory[] | undefined) || []);
 		} catch {
 			// Server might be offline
 		} finally {
@@ -22,7 +24,11 @@ export function useMemory() {
 
 	const update = useCallback(
 		async (id: string, observation: string) => {
-			await serverApi.updateMemory(id, observation);
+			const result = await chrome.storage.local.get(KEY);
+			const next = ((result[KEY] as AIMemory[] | undefined) || []).map((m) =>
+				m.id === id ? { ...m, observation } : m,
+			);
+			await chrome.storage.local.set({ [KEY]: next });
 			refresh();
 		},
 		[refresh],
@@ -30,7 +36,17 @@ export function useMemory() {
 
 	const add = useCallback(
 		async (observation: string) => {
-			await serverApi.createMemory(observation);
+			const result = await chrome.storage.local.get(KEY);
+			const next = [
+				...((result[KEY] as AIMemory[] | undefined) || []),
+				{
+					id: crypto.randomUUID(),
+					observation,
+					createdAt: new Date().toISOString(),
+					updatedAt: new Date().toISOString(),
+				},
+			];
+			await chrome.storage.local.set({ [KEY]: next });
 			refresh();
 		},
 		[refresh],
@@ -38,25 +54,23 @@ export function useMemory() {
 
 	const remove = useCallback(
 		async (id: string) => {
-			await serverApi.deleteMemory(id);
+			const result = await chrome.storage.local.get(KEY);
+			await chrome.storage.local.set({
+				[KEY]: ((result[KEY] as AIMemory[] | undefined) || []).filter((m) => m.id !== id),
+			});
 			refresh();
 		},
 		[refresh],
 	);
 
 	const clearAll = useCallback(async () => {
-		await serverApi.clearMemories();
+		await chrome.storage.local.set({ [KEY]: [] });
 		refresh();
 	}, [refresh]);
 
-	const aiEdit = useCallback(
-		async (instruction: string) => {
-			const result = await serverApi.aiEditMemories(instruction);
-			refresh();
-			return result.summary;
-		},
-		[refresh],
-	);
+	const aiEdit = useCallback(async (instruction: string) => {
+		return `Memories are stored locally. Edit them directly to apply: ${instruction}`;
+	}, []);
 
 	return { memories, loading, add, update, remove, clearAll, aiEdit, refresh };
 }

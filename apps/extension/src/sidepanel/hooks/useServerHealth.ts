@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import { serverApi } from "../services/serverApi.js";
 
 export type ServerStatus = "checking" | "online" | "offline";
 
@@ -9,9 +8,19 @@ export function useServerHealth() {
 
 	const check = useCallback(async () => {
 		try {
-			const health = await serverApi.health();
+			const stored = await chrome.storage.local.get("tab-orga-settings");
+			const url = (
+				(stored["tab-orga-settings"] as { proxyUrl?: string } | undefined)?.proxyUrl ||
+				"http://127.0.0.1:8317/v1"
+			).replace(/\/$/, "");
+			const key = (stored["tab-orga-settings"] as { proxyApiKey?: string } | undefined)
+				?.proxyApiKey;
+			const response = await fetch(`${url}/models`, {
+				headers: key ? { Authorization: `Bearer ${key}` } : undefined,
+			});
+			if (!response.ok) throw new Error(`Proxy returned ${response.status}`);
 			setStatus("online");
-			setCodexConnected(health.codex);
+			setCodexConnected(true);
 		} catch {
 			setStatus("offline");
 			setCodexConnected(false);

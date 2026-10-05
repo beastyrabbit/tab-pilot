@@ -30,6 +30,7 @@ export type {
 } from "./types/api.js";
 export type { AIMemory, MemorySource, RuleMatchType, UserRule } from "./types/memory.js";
 export type {
+	GroupingMode,
 	GroupTitleLength,
 	PublicSettings,
 	ServerSettings,
