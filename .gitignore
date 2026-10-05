@@ -9,6 +9,9 @@ apps/server/data/
 # Local extension packages and persistent CRX key
 apps/extension/.local/
 
+# Local store handoff note (workspace paths, private dashboard links); the shareable copy is agent-handoff-schaffa.html
+docs/chrome-web-store/agent-handoff.html
+
 # Environment
 .env
 .env.local
