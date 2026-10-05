@@ -101,6 +101,8 @@ async function prepareTabContext(tabs: TabInfo[]): Promise<TabInfo[]> {
 /** Browser state and settings shared by the apply steps. */
 interface ApplyContext {
 	settings: PublicSettings;
+	/** Every open tab when apply started. */
+	liveTabs: chrome.tabs.Tab[];
 	/** Tabs from the proposal that still exist, with their pre-apply group ids. */
 	currentTabs: TabInfo[];
 	/** Fixed group ids; a recreated fixed group's new id is added. */
@@ -189,6 +191,98 @@ async function groupRemainingTabs(toApply: GroupingSuggestion[], ctx: ApplyConte
 	const gid = await groupTabs(remaining);
 	for (const id of remaining) ctx.expected.set(id, gid);
 	await updateGroup(gid, { title: "Other", color: "grey" });
+}
+
+/**
+ * Snapshot the browser and, when not preserving groups, ungroup every tab
+ * outside a fixed group so the proposal can rebuild them.
+ */
+async function prepareApply(
+	settings: PublicSettings,
+	proposalTabs: TabInfo[],
+	expected: Map<number, number>,
+): Promise<ApplyContext> {
+	// Tabs can close while the proposal is on screen; never touch ids that are gone.
+	const liveTabs = await chrome.tabs.query({});
+	const liveTabIds = new Set(liveTabs.map((tab) => tab.id));
+	const currentTabs = proposalTabs.filter((tab) => liveTabIds.has(tab.id));
+	const fixedIds = new Set((await syncFixedGroupIds()).map((group) => group.id));
+	if (!settings.preserveExistingGroups) {
+		const resetIds = currentTabs
+			.filter((tab) => tab.groupId >= 0 && !fixedIds.has(tab.groupId))
+			.map((tab) => tab.id);
+		if (resetIds.length) await ungroupTabs(resetIds);
+	}
+	return { settings, liveTabs, currentTabs, fixedIds, expected };
+}
+
+/** Move tabs into the proposed groups, then optionally close duplicates (recorded in closedIds). */
+async function applyToBrowser(
+	toApply: GroupingSuggestion[],
+	ctx: ApplyContext,
+	closedIds: number[],
+): Promise<void> {
+	const liveTabIds = new Set(ctx.liveTabs.map((tab) => tab.id));
+	for (const proposed of toApply) {
+		const tabIds = proposed.tabIds.filter((id) => liveTabIds.has(id));
+		if (tabIds.length === 0) continue;
+		const suggestion = { ...proposed, tabIds };
+		const existingId = suggestion.existingGroupId;
+		if (existingId != null && ctx.fixedIds.has(existingId)) {
+			await applyFixedSuggestion(suggestion, existingId, ctx);
+		} else {
+			await applyGroupSuggestion(suggestion, ctx);
+		}
+	}
+	if (ctx.settings.groupingMode === "hard") await groupRemainingTabs(toApply, ctx);
+	if (ctx.settings.closeDuplicateTabs) closedIds.push(...(await closeDuplicates(ctx)));
+}
+
+async function closeDuplicates(ctx: ApplyContext): Promise<number[]> {
+	const lastAccessed = new Map<number, number>();
+	const liveGroupOf = new Map<number, number>();
+	for (const tab of ctx.liveTabs) {
+		if (tab.id === undefined) continue;
+		lastAccessed.set(tab.id, tab.lastAccessed ?? 0);
+		liveGroupOf.set(tab.id, tab.groupId);
+	}
+	// A tab ends in a fixed group if apply put it there or it was already in one.
+	const inFixedGroup = (id: number) =>
+		ctx.fixedIds.has(ctx.expected.get(id) ?? liveGroupOf.get(id) ?? -1);
+	const ids = pickDuplicateTabsToClose(
+		ctx.currentTabs,
+		lastAccessed,
+		ctx.settings.keepNewestDuplicate,
+		inFixedGroup,
+	);
+	if (ids.length) await closeTabs(ids);
+	return ids;
+}
+
+/** Record the browser state after apply, limited to groups in the windows this run covered. */
+async function captureApplyOutcome(
+	runLog: OrganizeRunLog,
+	expected: Map<number, number>,
+	closedDuplicateIds: number[],
+	secret: string,
+): Promise<void> {
+	try {
+		const [tabs, groups] = await Promise.all([chrome.tabs.query({}), chrome.tabGroups.query({})]);
+		const runWindows = new Set(runLog.tabs?.map((tab) => tab.windowId));
+		const runGroupIds = new Set(
+			tabs.filter((tab) => runWindows.has(tab.windowId)).map((tab) => tab.groupId),
+		);
+		recordOutcome(
+			runLog,
+			tabs,
+			groups.filter((group) => runGroupIds.has(group.id)),
+			expected,
+			closedDuplicateIds,
+			secret,
+		);
+	} catch {
+		runLog.error = "Could not read browser state to verify the apply result.";
+	}
 }
 
 export function useOrganize() {
@@ -452,31 +546,6 @@ export function useOrganize() {
 			const expected = new Map<number, number>();
 			const closedDuplicateIds: number[] = [];
 			let logSecret = "";
-			const captureOutcome = async () => {
-				if (!runLog) return;
-				try {
-					const [tabs, groups] = await Promise.all([
-						chrome.tabs.query({}),
-						chrome.tabGroups.query({}),
-					]);
-					recordOutcome(
-						runLog,
-						tabs,
-						groups.filter((group) =>
-							tabs.some(
-								(tab) =>
-									tab.groupId === group.id &&
-									runLog.tabs?.some((original) => original.windowId === tab.windowId),
-							),
-						),
-						expected,
-						closedDuplicateIds,
-						logSecret,
-					);
-				} catch {
-					runLog.error = "Could not read browser state to verify the apply result.";
-				}
-			};
 			try {
 				const organizeSettings = await loadSettings();
 				logSecret = organizeSettings.proxyApiKey || "";
@@ -486,54 +555,9 @@ export function useOrganize() {
 					runLog.error = undefined;
 					await persistLog(runLog);
 				}
-				// Tabs can close while the proposal is on screen; never touch ids that are gone.
-				const liveTabs = await chrome.tabs.query({});
-				const liveTabIds = new Set(liveTabs.map((tab) => tab.id));
-				const lastAccessed = new Map<number, number>();
-				for (const tab of liveTabs) {
-					if (tab.id !== undefined) lastAccessed.set(tab.id, tab.lastAccessed ?? 0);
-				}
-				const currentTabs = tabsRef.current.filter((tab) => liveTabIds.has(tab.id));
-				const fixedGroupsForApply = await syncFixedGroupIds();
-				const fixedIds = new Set(fixedGroupsForApply.map((group) => group.id));
-				if (!organizeSettings.preserveExistingGroups) {
-					const resetIds = currentTabs
-						.filter((tab) => tab.groupId >= 0 && !fixedIds.has(tab.groupId))
-						.map((tab) => tab.id);
-					if (resetIds.length) await ungroupTabs(resetIds);
-				}
 				// 1. Create/update suggested groups
-				const ctx: ApplyContext = { settings: organizeSettings, currentTabs, fixedIds, expected };
-				for (const proposed of toApply) {
-					const suggestion = {
-						...proposed,
-						tabIds: proposed.tabIds.filter((id) => liveTabIds.has(id)),
-					};
-					if (suggestion.tabIds.length === 0) continue;
-					const existingId = suggestion.existingGroupId;
-					if (existingId != null && fixedIds.has(existingId)) {
-						await applyFixedSuggestion(suggestion, existingId, ctx);
-					} else {
-						await applyGroupSuggestion(suggestion, ctx);
-					}
-				}
-				if (organizeSettings.groupingMode === "hard") await groupRemainingTabs(toApply, ctx);
-				if (organizeSettings.closeDuplicateTabs) {
-					// A tab ends in a fixed group if apply put it there or it was already in one.
-					const liveGroupOf = new Map(liveTabs.map((tab) => [tab.id, tab.groupId]));
-					const inFixedGroup = (id: number) =>
-						fixedIds.has(expected.get(id) ?? liveGroupOf.get(id) ?? -1);
-					const duplicateIds = pickDuplicateTabsToClose(
-						currentTabs,
-						lastAccessed,
-						organizeSettings.keepNewestDuplicate,
-						inFixedGroup,
-					);
-					if (duplicateIds.length) {
-						await closeTabs(duplicateIds);
-						closedDuplicateIds.push(...duplicateIds);
-					}
-				}
+				const ctx = await prepareApply(organizeSettings, tabsRef.current, expected);
+				await applyToBrowser(toApply, ctx, closedDuplicateIds);
 
 				// 2. Collapse ALL groups and move them to the left
 				await collapseAndReorderGroups();
@@ -545,8 +569,8 @@ export function useOrganize() {
 				setLoading(false);
 				setOrganizeMessage("");
 				setOrganizePhase(null);
-				await captureOutcome();
 				if (runLog) {
+					await captureApplyOutcome(runLog, expected, closedDuplicateIds, logSecret);
 					runLog.status = "applied";
 					runLog.appliedAt = new Date().toISOString();
 					await persistLog(runLog);
@@ -555,8 +579,8 @@ export function useOrganize() {
 				closeBridge();
 			} catch (e) {
 				setError(e instanceof Error ? e.message : "Failed to apply groups");
-				await captureOutcome();
 				if (runLog) {
+					await captureApplyOutcome(runLog, expected, closedDuplicateIds, logSecret);
 					runLog.status = "error";
 					runLog.error = "Apply failed. Some tabs may already have moved; see the observed state.";
 					await persistLog(runLog);
