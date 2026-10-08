@@ -1,10 +1,37 @@
 {
-  "version": 1,
-  "actions": {
-    "install": { "description": "Install dependencies", "command": "pnpm install" },
-    "build-extension": { "description": "Build the extension for Chrome Developer Mode", "command": "pnpm build:extension" },
-    "package-extension": { "description": "Build the Chrome Web Store ZIP", "command": "pnpm package:extension" },
-    "check-proxy": { "description": "Check EasyCLIProxyAPI", "command": "pnpm proxy:check" },
-    "open-extension": { "description": "Open the built extension folder", "command": "xdg-open apps/extension/dist" }
-  }
+  "$schema": "https://t3.codes/schema/t3.json",
+  "scripts": [
+    {
+      "name": "Set up worktree",
+      "command": "corepack pnpm@11.5.0 install --ignore-scripts --ignore-pnpmfile --frozen-lockfile",
+      "icon": "configure",
+      "runOnWorktreeCreate": true,
+      "async": false
+    },
+    {
+      "name": "Install dependencies",
+      "command": "corepack pnpm install --frozen-lockfile",
+      "icon": "configure"
+    },
+    {
+      "name": "Build extension",
+      "command": "corepack pnpm --filter @tab-orga/extension build",
+      "icon": "build"
+    },
+    {
+      "name": "Package extension",
+      "command": "corepack pnpm --filter @tab-orga/extension build && node scripts/package-extension.mjs",
+      "icon": "build"
+    },
+    {
+      "name": "Check proxy",
+      "command": "corepack pnpm run proxy:check",
+      "icon": "test"
+    },
+    {
+      "name": "Open extension",
+      "command": "xdg-open apps/extension/dist",
+      "icon": "play"
+    }
+  ]
 }
