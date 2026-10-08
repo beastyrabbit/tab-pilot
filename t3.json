@@ -3,7 +3,7 @@
   "scripts": [
     {
       "name": "Set up worktree",
-      "command": "corepack pnpm install --ignore-scripts --ignore-pnpmfile --frozen-lockfile",
+      "command": "corepack pnpm@11.5.0 install --ignore-scripts --ignore-pnpmfile --frozen-lockfile",
       "icon": "configure",
       "runOnWorktreeCreate": true,
       "async": false
