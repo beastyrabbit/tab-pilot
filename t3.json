@@ -3,35 +3,31 @@
   "scripts": [
     {
       "name": "Set up worktree",
-      "command": "corepack pnpm@11.5.0 install --ignore-scripts --ignore-pnpmfile --frozen-lockfile",
+      "command": "pnpm install --ignore-scripts --ignore-pnpmfile --frozen-lockfile",
       "icon": "configure",
       "runOnWorktreeCreate": true,
       "async": false
     },
     {
-      "name": "Install dependencies",
-      "command": "corepack pnpm install --frozen-lockfile",
-      "icon": "configure"
-    },
-    {
       "name": "Build extension",
-      "command": "corepack pnpm --filter @tab-orga/extension build",
+      "command": "pnpm run build:extension",
       "icon": "build"
     },
     {
       "name": "Package extension",
-      "command": "corepack pnpm --filter @tab-orga/extension build && node scripts/package-extension.mjs",
+      "command": "pnpm run package:extension",
       "icon": "build"
     },
     {
-      "name": "Check proxy",
-      "command": "corepack pnpm run proxy:check",
+      "name": "Check code",
+      "command": "pnpm run lint && pnpm run typecheck:extension && pnpm test",
       "icon": "test"
     },
     {
-      "name": "Open extension",
-      "command": "xdg-open apps/extension/dist",
-      "icon": "play"
+      "name": "Watch extension",
+      "command": "pnpm --filter @tab-orga/extension dev",
+      "icon": "build",
+      "stopOnSettle": true
     }
   ]
 }
